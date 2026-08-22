@@ -1,0 +1,10 @@
+{
+  "name": "Fridge2Feast AI",
+  "description": "AI Kitchen Decision Agent with Gemini Multimodal Vision, freshness intelligence, zero-waste meal optimization, rescue planner, and interactive culinary assistant.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

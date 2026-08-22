@@ -1,0 +1,11 @@
+Ingredient,Category,Quantity,Confidence,Confidence Label,Urgency,Waste Risk,Est. Use-By,Include
+Tomatoes,Vegetables,4 items,0.96,High,MEDIUM,45,4–7 days,True
+Paneer,Proteins & Meat,200g,0.92,High,HIGH,75,2–3 days,True
+Spinach,Vegetables,1 bunch,0.88,High,HIGH,90,1–2 days,True
+Garlic,Pantry & Spices,1 bulb,0.95,High,LOW,15,2+ weeks,True
+Ginger,Pantry & Spices,1 piece,0.90,High,LOW,15,2+ weeks,True
+Onions,Vegetables,3 medium,0.94,High,LOW,15,2+ weeks,True
+Milk,Dairy & Eggs,500ml,0.98,High,HIGH,75,2–3 days,True
+Butter,Dairy & Eggs,100g,0.91,High,LOW,15,2+ weeks,True
+Green Chillies,Vegetables,5 items,0.87,High,MEDIUM,45,4–7 days,True
+Coriander,Vegetables,1 bundle,0.85,High,HIGH,90,1–2 days,True

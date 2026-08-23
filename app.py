@@ -104,6 +104,38 @@ button[kind="primary"]:hover {
     border-bottom: 1px solid #EAE4D5;
 }
 
+.st-key-top-navigation [data-testid="stHorizontalBlock"] {
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.top-brand,
+.top-greeting {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+    .st-key-top-navigation [data-testid="stHorizontalBlock"] {
+        gap: 0.35rem;
+    }
+
+    .top-brand span {
+        font-size: 1rem !important;
+    }
+
+    .top-greeting {
+        font-size: 0.78rem !important;
+    }
+
+    .st-key-top-navigation .stButton > button {
+        width: auto !important;
+        min-width: 0 !important;
+        padding: 0.4rem 0.65rem !important;
+    }
+}
+
 /* Remove streamlit footer and menu for clean aesthetic */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
@@ -137,55 +169,31 @@ def render_top_navigation():
     if not user:
         return
 
-    c_brand, c_h, c_sc, c_k, c_r, c_sv, c_u, c_out = st.columns([2.4, 0.95, 1.05, 1.05, 1.05, 0.95, 1.2, 0.95])
+    with st.container(key="top-navigation"):
+        c_brand, c_user, c_out = st.columns([2.4, 1.2, 0.95])
 
-    with c_brand:
-        st.markdown("""<div style="display: flex; align-items: center; gap: 0.5rem; padding-top: 6px; white-space: nowrap;">
+        with c_brand:
+            st.markdown("""<div class="top-brand" style="display: flex; align-items: center; gap: 0.5rem; padding-top: 6px;">
             <div style="width: 32px; height: 32px; background: #556B2F; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">🍃</div>
-            <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 1.25rem; font-weight: 700; color: #2D3425; white-space: nowrap;">Fridge2Feast AI</span>
+            <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 1.25rem; font-weight: 700; color: #2D3425;">Fridge2Feast AI</span>
         </div>""", unsafe_allow_html=True)
 
-    with c_h:
-        if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == "dashboard" else "secondary"):
-            st.session_state.current_page = "dashboard"
-            st.rerun()
+        with c_user:
+            first_name = user.name.split()[0] if user.name else "Account"
+            st.markdown(f"""<div class="top-greeting" style="text-align: right; padding-top: 8px; font-weight: 600; color: #556B2F; font-size: 0.9rem;">Hello, {first_name}</div>""", unsafe_allow_html=True)
 
-    with c_sc:
-        if st.button("📷 Scanner", use_container_width=True, type="primary" if st.session_state.current_page == "scanner" else "secondary"):
-            st.session_state.current_page = "scanner"
-            st.rerun()
-
-    with c_k:
-        if st.button("🌿 Kitchen", use_container_width=True, type="primary" if st.session_state.current_page == "kitchen" else "secondary"):
-            st.session_state.current_page = "kitchen"
-            st.rerun()
-
-    with c_r:
-        if st.button("🍳 Recipes", use_container_width=True, type="primary" if st.session_state.current_page == "recipes" else "secondary"):
-            st.session_state.current_page = "recipes"
-            st.rerun()
-
-    with c_sv:
-        if st.button("📖 Saved", use_container_width=True, type="primary" if st.session_state.current_page == "saved" else "secondary"):
-            st.session_state.current_page = "saved"
-            st.rerun()
-
-    with c_u:
-        first_name = user.name.split()[0] if user.name else "Account"
-        st.markdown(f"""<div style="text-align: right; padding-top: 8px; font-weight: 600; color: #556B2F; font-size: 0.9rem; white-space: nowrap;">👤 {first_name}</div>""", unsafe_allow_html=True)
-
-    with c_out:
-        if st.button("🚪 Logout", key="top_logout"):
-            st.session_state.authenticated_user = None
-            st.session_state.current_page = "landing"
-            st.session_state.active_recipe = None
-            st.session_state.pending_scan_items = None
-            st.session_state.last_scan_ingredients = []
-            st.session_state.recipe_preferences = {}
-            st.session_state.generated_recipe = None
-            st.session_state.cooking_recipe = None
-            st.session_state.current_step_idx = 0
-            st.rerun()
+        with c_out:
+            if st.button("Logout", key="top_logout", width="content"):
+                st.session_state.authenticated_user = None
+                st.session_state.current_page = "landing"
+                st.session_state.active_recipe = None
+                st.session_state.pending_scan_items = None
+                st.session_state.last_scan_ingredients = []
+                st.session_state.recipe_preferences = {}
+                st.session_state.generated_recipe = None
+                st.session_state.cooking_recipe = None
+                st.session_state.current_step_idx = 0
+                st.rerun()
 
     st.markdown("<div style='border-bottom: 1px solid #EAE4D5; margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
 

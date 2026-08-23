@@ -1,29 +1,15 @@
-Haan 😭 ab samajh gaya. Tumhe **instructions nahi chahiye**, tumhe **ek single complete README file** chahiye jisme architecture diagrams, terminal-style boxes, badges, tables, flowcharts — **sab already Markdown/Mermaid syntax mein ho**, taaki tum **sirf ek baar copy-paste** karo aur GitHub automatically render kar de.
-
-Important: jo ASCII/mockup maine diya tha, woh screenshot/image nahi tha. Woh **README ke andar code blocks** hain, isliye GitHub par automatically text-art ke form mein dikhenge. Mermaid diagrams bhi GitHub par render ho sakte hain.
-
-### Exactly ye karo
-
-VS Code → `README.md` → **Ctrl+A** → नीचे वाला **पूरा block एक ही बार copy-paste** → Save.
-
-````markdown
-# 🍽️ Fridge2Feast AI
-
-> **From Fridge to Feast — an AI-powered kitchen intelligence platform that helps users understand their inventory, prioritize ingredients, generate personalized recipes, and reduce food waste.**
 
 <p align="center">
 
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-Framework-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
-![Gemini](https://img.shields.io/badge/Google-Gemini%20AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
-![Pandas](https://img.shields.io/badge/Pandas-Data%20Analytics-150458?style=for-the-badge&logo=pandas&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
-![Pytest](https://img.shields.io/badge/Pytest-Tested-0A9F6E?style=for-the-badge&logo=pytest&logoColor=white)
-![GitHub](https://img.shields.io/badge/GitHub-Open%20Source-181717?style=for-the-badge&logo=github&logoColor=white)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-App-red?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Gemini](https://img.shields.io/badge/Google-Gemini_AI-blue?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Pandas](https://img.shields.io/badge/Pandas-Data_Analytics-purple?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-Database-blue?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Pytest](https://img.shields.io/badge/Pytest-Tested-green?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
 
 </p>
 
-<p align="center">
 
 **AI Kitchen Intelligence • Gemini Vision • Personalized Recipes • Food Waste Reduction**
 
@@ -1455,9 +1441,6 @@ This project is released under the MIT License.
 ║                       WASTE LESS                                     ║
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
-```
-
-> **Fridge2Feast AI turns the refrigerator from a place where ingredients are forgotten into an intelligent kitchen assistant that helps users decide what to use, what to cook, and what to save.**
 
 ---
 

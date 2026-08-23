@@ -1,51 +1,73 @@
+"""Landing Page Component for Fridge2Feast AI."""
 import streamlit as st
 
+def render_landing():
+    """Render the premium zero-waste landing page."""
+    st.markdown("""
+        <div style="text-align: center; padding: 2rem 1rem 1rem 1rem;">
+            <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: #556B2F; border-radius: 16px; margin-bottom: 1rem; color: #FFFFFF; font-size: 32px;">
+                🍃
+            </div>
+            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 2.8rem; color: #2D3425; margin-bottom: 0.25rem; font-weight: 700; letter-spacing: -0.5px;">
+                Fridge2Feast AI
+            </h1>
+            <p style="font-size: 1.25rem; color: #C84B31; font-weight: 600; margin-bottom: 1.5rem; font-style: italic;">
+                "Turn What's Left Into What's Next"
+            </p>
+            <p style="max-width: 650px; margin: 0 auto 2rem auto; font-size: 1.05rem; color: #5A644D; line-height: 1.6;">
+                An intelligent zero-waste kitchen assistant powered by Gemini Vision. Simply scan your refrigerator, automatically track ingredient shelf-life, and generate personalized chef-quality meals tailored to what needs rescuing first.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
-def _go(view: str) -> None:
-    st.session_state.auth_view = view
-    st.rerun()
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        c_a, c_b = st.columns(2)
+        with c_a:
+            if st.button("🚀 Get Started / Sign Up", use_container_width=True, type="primary"):
+                st.session_state.auth_view = "signup"
+                st.session_state.current_page = "auth"
+                st.rerun()
+        with c_b:
+            if st.button("🔑 Log In", use_container_width=True):
+                st.session_state.auth_view = "login"
+                st.session_state.current_page = "auth"
+                st.rerun()
 
+    st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
 
-def render_public_landing() -> None:
-    left, right = st.columns([4, 1], vertical_alignment="center")
-    with left:
-        st.markdown("<div class='brand-lockup'>Fridge<span>2</span>Feast <small>AI</small></div>", unsafe_allow_html=True)
-    with right:
-        if st.button("Log in", width="stretch", key="landing_login"):
-            _go("login")
+    # 3 Pillars
+    p1, p2, p3 = st.columns(3)
 
-    hero, preview = st.columns([1.2, 0.8], vertical_alignment="center")
-    with hero:
-        st.badge("A calmer way to cook", icon=":material/auto_awesome:", color="green")
-        st.title("Turn what you have into something worth serving.")
-        st.write("Fridge2Feast reads your kitchen, protects ingredients that need attention, and turns them into meals you’ll actually want to make.")
-        with st.container(horizontal=True):
-            if st.button("Create your kitchen", type="primary", key="landing_signup"):
-                _go("signup")
-            if st.button("I already have an account", key="landing_login_hero"):
-                _go("login")
-        st.caption("Private by design · No guest mode · Your kitchen stays yours")
-    with preview:
-        with st.container(border=True):
-            st.caption("Tonight’s kitchen brief")
-            st.metric("Ingredients ready to use", "12", "+3 this week")
-            st.badge("2 items to use soon", icon=":material/timer:", color="orange")
-            st.write("Scan your fridge and get thoughtful recipe ideas from the food already at home.")
+    with p1:
+        st.markdown("""
+            <div style="background: #FFFFFF; border: 1px solid #E5DECE; border-radius: 16px; padding: 1.5rem; height: 100%; box-shadow: 0 4px 12px rgba(45,52,37,0.03);">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">📷</div>
+                <h3 style="font-family: serif; color: #2D3425; font-size: 1.2rem; margin-bottom: 0.5rem;">Gemini Refrigerator Vision</h3>
+                <p style="color: #68735A; font-size: 0.92rem; line-height: 1.5;">
+                    Point your camera or upload a fridge photo. Multimodal AI identifies ingredients, estimates quantities, and suggests proper storage.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    st.space("medium")
-    st.subheader("Everything you need to waste less and cook better", anchor=False)
-    columns = st.columns(3)
-    features = [
-        (":material/photo_camera:", "Scan your fridge", "Upload a photo and review detected ingredients before anything is used."),
-        (":material/menu_book:", "Cook with confidence", "Get personalised recipes, shopping gaps and guided cooking steps."),
-        (":material/eco:", "Stay ahead of waste", "See what to use next, create rescue plans and track your impact."),
-    ]
-    for column, (icon, title, description) in zip(columns, features):
-        with column:
-            with st.container(border=True):
-                st.markdown(icon)
-                st.subheader(title, anchor=False)
-                st.caption(description)
+    with p2:
+        st.markdown("""
+            <div style="background: #FFFFFF; border: 1px solid #E5DECE; border-radius: 16px; padding: 1.5rem; height: 100%; box-shadow: 0 4px 12px rgba(45,52,37,0.03);">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">⏳</div>
+                <h3 style="font-family: serif; color: #2D3425; font-size: 1.2rem; margin-bottom: 0.5rem;">Deterministic Freshness Engine</h3>
+                <p style="color: #68735A; font-size: 0.92rem; line-height: 1.5;">
+                    Intelligent countdown tracking flags expiring items with <em>USE TODAY</em> and <em>USE SOON</em> alerts so nothing goes to waste.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    st.space("medium")
-    st.caption("Fridge2Feast AI · Your intelligent, zero-waste kitchen companion")
+    with p3:
+        st.markdown("""
+            <div style="background: #FFFFFF; border: 1px solid #E5DECE; border-radius: 16px; padding: 1.5rem; height: 100%; box-shadow: 0 4px 12px rgba(45,52,37,0.03);">
+                <div style="font-size: 2rem; margin-bottom: 0.75rem;">🍳</div>
+                <h3 style="font-family: serif; color: #2D3425; font-size: 1.2rem; margin-bottom: 0.5rem;">Personalized Zero-Waste Recipes</h3>
+                <p style="color: #68735A; font-size: 0.92rem; line-height: 1.5;">
+                    Generate step-by-step recipes prioritized around your expiring pantry items, customized for your cuisine, spice, and dietary goals.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)

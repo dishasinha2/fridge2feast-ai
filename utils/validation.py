@@ -1,55 +1,142 @@
+"""Validation utilities for Image files and Data schemas."""
 import re
-from typing import Dict, Any, List, Tuple
+from typing import Tuple, Dict, Any, List
 
-def validate_email(email: str) -> bool:
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+VALID_CATEGORIES = [
+    "Produce",
+    "Dairy",
+    "Protein",
+    "Pantry",
+    "Condiments",
+    "Bakery",
+    "Other"
+]
+
+VALID_UNITS = [
+    "pcs",
+    "g",
+    "kg",
+    "ml",
+    "l",
+    "bunch",
+    "can",
+    "cup",
+    "tbsp",
+    "tsp",
+    "pack",
+    "slice",
+    "handful",
+    "item"
+]
+
+def validate_image_bytes(file_bytes: bytes, filename: str = "", mime_type: str = "") -> Tuple[bool, str]:
     """
-    Validates email format using regex.
+    Strictly validate image file:
+    - size limit (<= 10MB)
+    - binary magic number signature
+    - file extension and mime type if provided
     """
-    if not email:
-        return False
-    pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-    return bool(re.match(pattern, email.strip()))
+    if not file_bytes:
+        return False, "Image file is empty."
+    
+    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+        return False, f"File size ({len(file_bytes)/(1024*1024):.1f} MB) exceeds maximum allowed 10 MB limit."
 
-def validate_password(password: str) -> bool:
+    # Binary signature check
+    is_jpeg = file_bytes.startswith(b"\xFF\xD8\xFF")
+    is_png = file_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = len(file_bytes) >= 12 and file_bytes[:4] == b"RIFF" and file_bytes[8:12] == b"WEBP"
+
+    if not (is_jpeg or is_png or is_webp):
+        return False, "Invalid image format. Only real JPEG, PNG, and WebP files are supported."
+
+    if filename:
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_EXTENSIONS:
+            return False, f"Unsupported file extension '{ext}'. Please upload JPG, PNG, or WEBP."
+
+    if mime_type and mime_type.lower() not in ALLOWED_MIME_TYPES:
+        return False, f"Unsupported MIME type '{mime_type}'."
+
+    return True, ""
+
+def normalize_ingredient_name(name: str) -> str:
+    """Clean and normalize an ingredient name."""
+    if not name:
+        return ""
+    cleaned = re.sub(r"[^a-zA-Z0-9\s-]", "", name).strip()
+    return cleaned.title()
+
+def validate_detected_ingredient(item: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
     """
-    Ensures passwords are suitable for an account login.
+    Validate and normalize a single detected ingredient from Gemini Vision output.
+    Returns: (is_valid, normalized_dict, error_msg)
     """
-    if not password or len(password) < 8:
-        return False
-    return any(char.isalpha() for char in password) and any(char.isdigit() for char in password)
+    if not isinstance(item, dict):
+        return False, {}, "Item must be a dictionary object."
 
-def validate_preferences(preferences: Dict[str, Any]) -> Tuple[bool, List[str]]:
-    """
-    Strict validation of user preferences before dispatching to Gemini API:
-    - diet, cuisine, meal_type, craving, hunger_level, household_size, servings, budget, max_time, difficulty, spice_level, restrictions, avoid_list
-    Returns (is_valid, list_of_error_messages).
-    """
-    errors: List[str] = []
+    name = normalize_ingredient_name(str(item.get("name", "")))
+    if not name or len(name) < 2:
+        return False, {}, "Ingredient name is too short or missing."
 
-    servings = preferences.get("servings") or preferences.get("household_size")
-    if servings is not None:
-        try:
-            s_val = int(servings)
-            if s_val < 1:
-                errors.append("Servings must be at least 1.")
-            elif s_val > 24:
-                errors.append("Servings cannot exceed 24.")
-        except (ValueError, TypeError):
-            errors.append("Servings must be a valid positive integer.")
+    category = str(item.get("category", "Produce")).strip().title()
+    if category not in VALID_CATEGORIES:
+        category = "Other"
 
-    budget = preferences.get("budgetINR")
-    if budget is not None:
-        try:
-            b_val = float(budget)
-            if b_val < 0:
-                errors.append("Budget cannot be negative.")
-            elif b_val > 10000:
-                errors.append("Budget cannot exceed ₹10,000 INR.")
-        except (ValueError, TypeError):
-            errors.append("Budget must be a valid numeric value.")
+    try:
+        qty = float(item.get("estimated_quantity", item.get("quantity", 1)))
+        if qty <= 0:
+            qty = 1.0
+    except (ValueError, TypeError):
+        qty = 1.0
 
-    avoid_list = preferences.get("avoid_list") or preferences.get("dietaryRestrictions")
-    if avoid_list is not None and not isinstance(avoid_list, list):
-        errors.append("Restrictions and Avoid items must be provided as a list.")
+    unit = str(item.get("unit", "pcs")).strip().lower()
+    if unit not in VALID_UNITS:
+        unit = "pcs"
 
-    return len(errors) == 0, errors
+    freshness_status = str(item.get("freshness_status", "FRESH")).strip().upper()
+    if freshness_status not in ["USE TODAY", "USE SOON", "FRESH"]:
+        freshness_status = "FRESH"
+
+    try:
+        shelf_life = int(item.get("estimated_shelf_life_days", item.get("estimated_shelf_life", 5)))
+        if shelf_life < 0:
+            shelf_life = 3
+    except (ValueError, TypeError):
+        shelf_life = 5
+
+    storage_advice = str(item.get("storage_recommendation", item.get("storage_advice", "Store in a cool, dry place."))).strip()
+
+    try:
+        confidence = float(item.get("confidence", 0.9))
+        confidence = max(0.0, min(1.0, confidence))
+    except (ValueError, TypeError):
+        confidence = 0.85
+
+    normalized = {
+        "name": name,
+        "category": category,
+        "quantity": qty,
+        "unit": unit,
+        "freshness_status": freshness_status,
+        "estimated_shelf_life_days": shelf_life,
+        "storage_advice": storage_advice,
+        "confidence": confidence
+    }
+    return True, normalized, ""
+
+def validate_ingredient_batch(raw_items: List[Any]) -> List[Dict[str, Any]]:
+    """Validate a batch of raw detected items and return only valid normalized dictionaries."""
+    valid_items = []
+    if not isinstance(raw_items, list):
+        return valid_items
+    for item in raw_items:
+        is_val, norm, _ = validate_detected_ingredient(item)
+        if is_val:
+            valid_items.append(norm)
+    return valid_items
+

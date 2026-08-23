@@ -1,202 +1,195 @@
-import hashlib
-import hmac
-import secrets
-import sqlite3
-from pathlib import Path
+"""Authentication Service for Fridge2Feast AI."""
+import json
+from typing import Optional, Tuple, Dict, Any
+from utils.database import get_db_connection
+from utils.security import hash_password, verify_password, validate_email, validate_password_strength
+from models.user import User
 
-import streamlit as st
-from utils.validation import validate_email, validate_password
-
-def initialize_session_state(force_reset: bool = False):
+def signup_user(email: str, name: str, password: str) -> Tuple[Optional[User], str]:
     """
-    Centralized session state initializer for Fridge2Feast AI Kitchen Decision Agent.
-    Ensures strictly isolated, session-scoped runtime state across authenticated users.
+    Register a new user with scrypt password hash and salt.
+    Returns (User, "") on success, or (None, error_message) on failure.
     """
-    defaults = {
-        # Authentication & Isolation
-        "authenticated": False,
-        "user": None,
-        "auth_view": "public_landing",  # 'public_landing', 'login', 'signup', 'app'
-        "active_tab": "Dashboard",      # Default to AI Decision Dashboard
-        
-        # Scanner & Vision Detection
-        "detected_ingredients": [],     # Perishable user inventory
-        "uncertain_items": [],
-        "non_food_items": [],
-        "vision_summary": "",
-        "scanner_in_memory_image": None,
-        "scanner_in_memory_mime": "image/jpeg",
-        "scanner_status": "idle",       # 'idle', 'analyzing', 'failed', 'success'
-        "scanner_error_message": None,
-        "scanner_is_transient_error": False,
-        
-        # Structured Human-in-the-Loop Vision Audit
-        "hitl_vision_audit": {
-            "initial_detected_count": 0,
-            "confirmed_count": 0,
-            "edited_count": 0,
-            "removed_count": 0,
-            "added_count": 0,
-            "raw_detected_names": [],
-        },
+    email_clean = email.strip().lower()
+    name_clean = name.strip()
 
-        # Structured Kitchen Intent & Meal Context
-        "meal_context": {
-            "craving": "Spicy",
-            "meal_type": "Evening Snack",
-            "hunger_level": "Medium",
-            "household_size": 2,
-            "household_type": "Couple",
-            "diet": "Vegetarian",
-            "spice_level": "Medium",
-            "cookingTime": "Under 30 minutes",
-            "difficulty": "Easy",
-            "budgetINR": 150,
-            "avoid_list": [],
-            "dietaryRestrictions": [],
-            "optimization_objective": "Balanced",
-        },
-        
-        # Personal Taste Profile (Learns from user feedback without claiming model retraining)
-        "taste_profile": {
-            "favorite_cuisines": ["Indian"],
-            "disliked_ingredients": [],
-            "preferred_spice": "Medium",
-            "preferred_speed": "Under 30 mins",
-            "recipes_cooked_count": 0,
-            "ingredients_rescued_count": 0,
-            "ratings_history": [],
-            "repeat_cook_count": 0,
-            "rejected_count": 0,
-        },
-        
-        # Recipe & Decision Engine
-        "generated_recipes": [],
-        "selected_recipe": None,
-        "rescue_plan": None,
-        "meal_plan": None,
-        "leftover_suggestions": None,
-        "saved_recipes": [],
-        "cooking_recipe": None,
-        "cooking_step": 0,
-        "shopping_recipe": None,
-        
-        # Reminders & Feedback
-        "active_reminders": [],
-        "last_feedback": None,
-        
-        # Sous-Chef Chat Messages
-        "sous_chef_messages": [
-            {
-                "role": "assistant",
-                "content": "Hello Chef! I am your AI Kitchen Decision Sous-Chef. Ask me for ingredient substitutions, freshness advice, or cooking techniques!"
-            }
-        ],
-        
-        # AI Telemetry & Observability
-        "ai_telemetry": {
-            "total_requests": 0,
-            "successful_requests": 0,
-            "failed_requests": 0,
-            "errors_503": 0,
-            "errors_429": 0,
-            "timeouts": 0,
-            "validation_failures": 0,
-            "latencies_ms": [],
-        }
-    }
+    if not name_clean or len(name_clean) < 2:
+        return None, "Please enter your full name."
 
-    for key, value in defaults.items():
-        if force_reset or key not in st.session_state:
-            st.session_state[key] = value
+    if not validate_email(email_clean):
+        return None, "Please enter a valid email address."
 
-def init_auth_state():
-    """Alias for backwards compatibility."""
-    initialize_session_state(force_reset=False)
+    is_valid_pw, pw_err = validate_password_strength(password)
+    if not is_valid_pw:
+        return None, pw_err
 
-def login_user(email: str, name: str = None) -> bool:
-    """
-    Logs in user with clean, isolated session state.
-    """
-    display_name = name or (email.split('@')[0].capitalize() if '@' in email else 'Chef')
-    st.session_state.authenticated = True
-    st.session_state.user = {
-        "name": display_name,
-        "email": email,
-        "plan": "Pro Zero-Waste",
-    }
-    st.session_state.auth_view = "app"
-    return True
+    # Check if user already exists
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE email = ?;", (email_clean,))
+        if cursor.fetchone():
+            return None, "An account with this email already exists."
 
-USER_DATABASE = Path(__file__).resolve().parent.parent / "data" / "fridge2feast_users.db"
+        # Hash password
+        pwd_hash, salt = hash_password(password)
 
-
-def _connection() -> sqlite3.Connection:
-    """Return the local account store, creating its schema on first use."""
-    USER_DATABASE.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(USER_DATABASE)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            email TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL
+        cursor.execute(
+            """
+            INSERT INTO users (email, name, password_hash, salt)
+            VALUES (?, ?, ?, ?);
+            """,
+            (email_clean, name_clean, pwd_hash, salt)
         )
-    """)
-    return conn
+        user_id = cursor.lastrowid
 
-
-def _hash_password(password: str, salt: bytes) -> str:
-    return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1).hex()
-
-
-def authenticate_user(email: str, password: str) -> tuple[bool, str | None]:
-    """Authenticate a local account without ever storing a plain-text password."""
-    normalized_email = (email or "").strip().lower()
-    with _connection() as conn:
-        row = conn.execute(
-            "SELECT name, password_hash, salt FROM users WHERE email = ?", (normalized_email,)
-        ).fetchone()
-    if not row:
-        return False, None
-    expected = _hash_password(password, bytes.fromhex(row[2]))
-    return hmac.compare_digest(expected, row[1]), row[0]
-
-
-def signup_user(name: str, email: str, password: str) -> tuple[bool, str | None]:
-    """
-    Creates an authenticated, session-scoped user without persisting credentials.
-    """
-    normalized_name = " ".join((name or "").split())
-    normalized_email = (email or "").strip().lower()
-
-    if not normalized_name or not validate_email(normalized_email) or not validate_password(password):
-        return False, "Please complete all fields with a valid email and stronger password."
-
-    salt = secrets.token_bytes(16)
-    password_hash = _hash_password(password, salt)
-    try:
-        with _connection() as conn:
-            conn.execute(
-                "INSERT INTO users (email, name, password_hash, salt) VALUES (?, ?, ?, ?)",
-                (normalized_email, normalized_name, password_hash, salt.hex()),
+        # Initialize default preferences
+        default_prefs = {
+            "cuisines": ["Indian", "Italian", "Mexican"],
+            "dietary": ["Vegetarian"],
+            "spice_level": "Medium",
+            "default_servings": 2,
+            "prioritized_ingredients": [],
+            "avoided_ingredients": []
+        }
+        cursor.execute(
+            """
+            INSERT INTO preferences (user_id, cuisines, dietary, spice_level, default_servings, prioritized_ingredients, avoided_ingredients)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                user_id,
+                json.dumps(default_prefs["cuisines"]),
+                json.dumps(default_prefs["dietary"]),
+                default_prefs["spice_level"],
+                default_prefs["default_servings"],
+                json.dumps(default_prefs["prioritized_ingredients"]),
+                json.dumps(default_prefs["avoided_ingredients"])
             )
-    except sqlite3.IntegrityError:
-        return False, "An account already exists for this email. Please log in instead."
+        )
 
-    st.session_state.authenticated = True
-    st.session_state.user = {
-        "name": normalized_name,
-        "email": normalized_email,
-        "plan": "Pro Zero-Waste",
-    }
-    st.session_state.auth_view = "app"
-    return True, None
+        cursor.execute("SELECT id, email, name, created_at FROM users WHERE id = ?;", (user_id,))
+        row = cursor.fetchone()
+        user = User(
+            id=row["id"],
+            email=row["email"],
+            name=row["name"],
+            created_at=str(row["created_at"]),
+            preferences=default_prefs
+        )
+        return user, ""
 
-def logout_user():
+def login_user(email: str, password: str) -> Tuple[Optional[User], str]:
     """
-    Safely purges all session state and returns to landing.
+    Authenticate user using scrypt constant-time hash comparison.
+    Returns (User, "") on success, or (None, error_message) on failure.
     """
-    st.session_state.clear()
-    initialize_session_state(force_reset=True)
-    st.session_state.auth_view = "public_landing"
+    email_clean = email.strip().lower()
+    if not email_clean or not password:
+        return None, "Please enter both email and password."
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, name, password_hash, salt, created_at FROM users WHERE email = ?;",
+            (email_clean,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None, "Invalid email or password."
+
+        stored_hash = row["password_hash"]
+        stored_salt = row["salt"]
+
+        if not verify_password(password, stored_hash, stored_salt):
+            return None, "Invalid email or password."
+
+        user_id = row["id"]
+        # Fetch preferences
+        cursor.execute("SELECT * FROM preferences WHERE user_id = ?;", (user_id,))
+        pref_row = cursor.fetchone()
+        preferences = {}
+        if pref_row:
+            try:
+                preferences = {
+                    "cuisines": json.loads(pref_row["cuisines"]),
+                    "dietary": json.loads(pref_row["dietary"]),
+                    "spice_level": pref_row["spice_level"],
+                    "default_servings": pref_row["default_servings"],
+                    "prioritized_ingredients": json.loads(pref_row["prioritized_ingredients"]),
+                    "avoided_ingredients": json.loads(pref_row["avoided_ingredients"])
+                }
+            except Exception:
+                preferences = {"cuisines": ["Italian"], "dietary": [], "spice_level": "Medium", "default_servings": 2}
+
+        user = User(
+            id=user_id,
+            email=row["email"],
+            name=row["name"],
+            created_at=str(row["created_at"]),
+            preferences=preferences
+        )
+        return user, ""
+
+def get_user_by_id(user_id: int) -> Optional[User]:
+    """Retrieve user object by ID."""
+    if not user_id:
+        return None
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, email, name, created_at FROM users WHERE id = ?;", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        cursor.execute("SELECT * FROM preferences WHERE user_id = ?;", (user_id,))
+        pref_row = cursor.fetchone()
+        preferences = {}
+        if pref_row:
+            try:
+                preferences = {
+                    "cuisines": json.loads(pref_row["cuisines"]),
+                    "dietary": json.loads(pref_row["dietary"]),
+                    "spice_level": pref_row["spice_level"],
+                    "default_servings": pref_row["default_servings"],
+                    "prioritized_ingredients": json.loads(pref_row["prioritized_ingredients"]),
+                    "avoided_ingredients": json.loads(pref_row["avoided_ingredients"])
+                }
+            except Exception:
+                pass
+        return User(
+            id=row["id"],
+            email=row["email"],
+            name=row["name"],
+            created_at=str(row["created_at"]),
+            preferences=preferences
+        )
+
+def update_user_preferences(user_id: int, preferences: Dict[str, Any]) -> bool:
+    """Update user culinary preferences in SQLite."""
+    if not user_id:
+        return False
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO preferences (user_id, cuisines, dietary, spice_level, default_servings, prioritized_ingredients, avoided_ingredients, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                cuisines = excluded.cuisines,
+                dietary = excluded.dietary,
+                spice_level = excluded.spice_level,
+                default_servings = excluded.default_servings,
+                prioritized_ingredients = excluded.prioritized_ingredients,
+                avoided_ingredients = excluded.avoided_ingredients,
+                updated_at = CURRENT_TIMESTAMP;
+            """,
+            (
+                user_id,
+                json.dumps(preferences.get("cuisines", [])),
+                json.dumps(preferences.get("dietary", [])),
+                preferences.get("spice_level", "Medium"),
+                preferences.get("default_servings", 2),
+                json.dumps(preferences.get("prioritized_ingredients", [])),
+                json.dumps(preferences.get("avoided_ingredients", []))
+            )
+        )
+        return True

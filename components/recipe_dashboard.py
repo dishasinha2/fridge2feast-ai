@@ -12,7 +12,7 @@ def render_recipe_dashboard_component():
         """
         <div style="margin-bottom: 20px;">
             <h1 style="color: #ffffff; font-size: 28px; font-weight: 800; margin: 0 0 6px 0;">
-                Your Kitchen Suggestions
+                Recipes
             </h1>
             <p style="color: #cbd5e1; font-size: 15px; margin: 0;">
                 Tailored to what you have on hand and what you're craving.
@@ -31,13 +31,13 @@ def render_recipe_dashboard_component():
             """
             <div style="background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 24px; text-align: center; margin: 20px 0;">
                 <p style="color: #cbd5e1; font-size: 15px; margin: 0 0 16px 0;">
-                    No recipes generated yet. Tell the Kitchen Assistant what you'd like to make.
+                    No recipes yet. Tell us what you’d like to make.
                 </p>
             </div>
             """,
             unsafe_allow_html=True
         )
-        if st.button("✨ What should I cook?", type="primary", use_container_width=True):
+        if st.button("What’s cooking tonight?", type="primary", width="stretch"):
             st.session_state.active_tab = "Kitchen Agent"
             st.rerun()
         return

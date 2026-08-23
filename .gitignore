@@ -1,35 +1,10 @@
-# Python
-.venv/
-venv/
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Environment / secrets
-.env
-.env.*
-env.example
-.streamlit/secrets.toml
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-data/fridge2feast_users.db
-
-# Node
 node_modules/
 build/
 dist/
 coverage/
-
-# Logs
-*.log
-
-# OS
 .DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
+*.log
+.env*
+!.env.example
+.streamlit/secrets.toml
+.env

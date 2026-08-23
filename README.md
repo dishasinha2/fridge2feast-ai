@@ -1,46 +1,20 @@
-# 👨‍🍳 Fridge2Feast AI - Python & Streamlit Capstone Edition
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-> **Fridge2Feast AI is a Python + Streamlit application powered by Google Gemini.**
+# Run and deploy your AI Studio app
 
-Fridge2Feast AI is a zero-waste culinary decision intelligence platform engineered natively with **Python 3.11, Streamlit, Pandas, and Google Gemini Multimodal AI**.
+This contains everything you need to run your app locally.
 
-Kitchen state is managed in **session-scoped runtime state** (`st.session_state`). Local accounts are stored in a gitignored SQLite database with salted `scrypt` password hashes; production deployments should replace this local store with a managed identity provider and database.
+View your app in AI Studio: https://ai.studio/apps/d07aaca6-1eef-4bde-9697-fe6f1e6db608
 
----
+## Run Locally
 
-## 🌟 Key Features
+**Prerequisites:**  Node.js
 
-- 📸 **Smart Fridge Vision Scanner**: Capture or upload photos of your open fridge or pantry. Gemini AI detects edible ingredients, categories, and estimated quantities directly in memory.
-- 🥦 **Pandas Inventory Management**: Edit detected quantities with `st.data_editor`, filter by category, add items manually, and calculate your **Fridge Potential Score**.
-- 🍳 **AI Recipe Studio**: Custom culinary preferences (Diet, Cuisine, Cooking Time, Difficulty, Servings, INR Budget, Spice Level, Allergies) generating **exactly 3 zero-waste recipes** (*Best Match*, *Quick Feast*, *Creative Pick*).
-- 🍽️ **Recipe Dashboard & KPIs**: Utilization %, missing ingredients cost in INR ₹, step-by-step preparation, chef tips, substitutions, and nutrition estimates.
-- 👨‍🍳 **Interactive Step-by-Step Cooking Mode**: Guided progress with celebratory completions.
-- 🛒 **Smart Shopping List & Exports**: Instant cost calculation with downloadable **CSV, TXT, and Markdown** exports.
-- 💬 **Contextual AI Sous-Chef**: Chat assistant for ingredient swaps, dietary adjustments, and time-saving shortcuts.
-- 📖 **Feastbook**: Save and organize favorite recipes in session-scoped runtime state.
-- 📊 **Zero-Waste Analytics**: Plotly & Pandas views of verified session inventory, generated recipes, and saved recipes.
 
----
-
-## 🛠️ Tech Stack & Architecture
-
-- **Runtime & UI**: Python 3.11 + Streamlit
-- **AI Core**: Google Gemini API (`google-genai` SDK with `GEMINI_MODEL`, default `gemini-2.5-flash`)
-- **Data Engineering**: Pandas & Plotly
-- **State Model**: Session-scoped runtime state (`st.session_state`)
-
----
-
-## 🚀 Running Locally
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the Streamlit application
-streamlit run app.py
-```
-
-### Gemini configuration
-
-Configure `GEMINI_API_KEY` in Streamlit secrets or the environment. For local development only, a root `.env` file is also supported. `GEMINI_MODEL` is optional and defaults to `gemini-2.5-flash`.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

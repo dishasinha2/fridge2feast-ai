@@ -1,66 +1,178 @@
+"""Authenticated Dashboard Component for Fridge2Feast AI."""
 import streamlit as st
+from datetime import datetime
+from services.kitchen_service import get_kitchen_summary, get_expiring_ingredients
+from services.recipe_service import get_saved_recipes
+from services.recommendation_service import get_personalized_recommendations
+from services.notification_service import get_user_notifications, mark_notification_read
+from services.auth_service import update_user_preferences
 
-from components.cooking_mode import render_cooking_mode_component
-from components.dashboard_home import render_dashboard_component
-from components.feastbook import render_feastbook_component
-from components.inventory import render_inventory_component
-from components.kitchen_agent import render_kitchen_agent_component
-from components.recipe_dashboard import render_recipe_dashboard_component
-from components.scanner import render_scanner_component
-from components.shopping_list import render_shopping_list_component
-from components.sous_chef import render_sous_chef_component
-from services.auth_service import logout_user
+def get_greeting() -> str:
+    """Return friendly time-of-day greeting."""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    elif 12 <= hour < 17:
+        return "Good afternoon"
+    else:
+        return "Good evening"
 
-NAVIGATION = {
-    "Home": "Dashboard",
-    "Scan": "Scanner",
-    "My Kitchen": "Inventory",
-    "Recipes": "Recipes",
-    "Saved": "Feastbook",
-}
-SPECIAL_VIEWS = {"Cooking Mode", "Shopping List", "AI Sous-Chef"}
-
-
-def _sync_navigation() -> None:
-    st.session_state.active_tab = NAVIGATION[st.session_state.workspace_nav]
-
-
-def render_authenticated_dashboard() -> None:
-    """Render only customer-facing workspace views; diagnostics remain internal."""
-    user = st.session_state.get("user")
+def render_dashboard():
+    """Render the dashboard matching the visual craft of Reference Image 1."""
+    user = st.session_state.authenticated_user
     if not user:
-        st.session_state.authenticated = False
-        st.session_state.auth_view = "login"
-        st.warning("Please log in to continue.")
-        return
-    user_name = user["name"]
-    top_left, top_right = st.columns([4, 1], vertical_alignment="center")
-    with top_left:
-        st.markdown(f"<div class='brand-lockup'>Fridge<span>2</span>Feast <small>AI</small></div><p class='workspace-greeting'>Your zero-waste kitchen · Welcome back, {user_name}</p>", unsafe_allow_html=True)
-    with top_right:
-        with st.popover("Account", icon=":material/account_circle:"):
-            st.write(user_name)
-            st.caption(user["email"])
-            st.caption("Your account details are kept private.")
-            if st.button("Log out", icon=":material/logout:", width="stretch", key="dashboard_logout"):
-                logout_user()
-                st.rerun()
-
-    current = st.session_state.get("active_tab", "Dashboard")
-    if current not in SPECIAL_VIEWS:
-        expected_label = next((label for label, view in NAVIGATION.items() if view == current), "Home")
-        if st.session_state.get("workspace_nav") != expected_label:
-            st.session_state.workspace_nav = expected_label
-        st.segmented_control("Kitchen navigation", list(NAVIGATION), default=expected_label, selection_mode="single", label_visibility="collapsed", key="workspace_nav", on_change=_sync_navigation, width="stretch")
-    elif st.button("Back to workspace", icon=":material/arrow_back:", key="back_to_workspace"):
-        st.session_state.active_tab = "Recipes"
+        st.session_state.current_page = "landing"
         st.rerun()
 
-    views = {
-        "Dashboard": render_dashboard_component, "Scanner": render_scanner_component,
-        "Inventory": render_inventory_component, "Kitchen Agent": render_kitchen_agent_component,
-        "Recipes": lambda: render_recipe_dashboard_component() if st.session_state.get("generated_recipes") else render_kitchen_agent_component(),
-        "Cooking Mode": render_cooking_mode_component, "Shopping List": render_shopping_list_component,
-        "AI Sous-Chef": render_sous_chef_component, "Feastbook": render_feastbook_component,
-    }
-    views.get(current, render_dashboard_component)()
+    greeting = get_greeting()
+    first_name = user.name.split()[0] if user.name else "Chef"
+
+    # Kitchen metrics from SQLite
+    summary = get_kitchen_summary(user.id)
+    saved_recipes = get_saved_recipes(user.id)
+    saved_count = len(saved_recipes)
+    expiring_items = get_expiring_ingredients(user.id)
+    notifications = get_user_notifications(user.id, unread_only=True)
+    recommendations = get_personalized_recommendations(user.id, user.preferences)
+
+    # 1. Header & Greeting
+    st.markdown(f"""
+        <div style="margin-bottom: 1.5rem;">
+            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 2.6rem; color: #2D3425; margin-bottom: 0.2rem; font-style: italic; font-weight: 700;">
+                {greeting}, {first_name}
+            </h1>
+            <p style="font-size: 1.1rem; color: #5A644D; margin: 0;">
+                Let's see what's fresh in your kitchen today.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # 2. Action Pill Buttons
+    b1, b2, b3 = st.columns([1.6, 1.3, 1.3])
+    with b1:
+        if summary["total_count"] and st.button("What should I cook?", use_container_width=True, type="primary"):
+            st.session_state.current_page = "recipes"
+            st.session_state.recipe_flow_stage = "preferences"
+            st.rerun()
+        elif not summary["total_count"]:
+            st.info("Your kitchen is empty.")
+    with b2:
+        if st.button("📷 Scan my fridge", use_container_width=True):
+            st.session_state.current_page = "scanner"
+            st.rerun()
+    with b3:
+        if not summary["total_count"]:
+            if st.button("Add Ingredients", use_container_width=True):
+                st.session_state.current_page = "kitchen"
+                st.rerun()
+        elif st.button("♻️ Rescue items", use_container_width=True):
+            st.session_state.current_page = "recipes"
+            st.session_state.rescue_mode = True
+            st.session_state.recipe_flow_stage = "preferences"
+            st.rerun()
+
+    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+
+    # 3. Notification alerts if expiring items exist
+    if notifications:
+        for notif in notifications[:2]:
+            st.markdown(f"""<div style="background: #FFF4E5; border: 1px solid #FFD8A8; border-left: 5px solid #C84B31; border-radius: 12px; padding: 0.85rem 1.2rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+<div>
+<strong style="color: #C84B31; font-size: 0.95rem;">⚠️ {notif['title']}</strong>
+<div style="color: #664D3B; font-size: 0.88rem; margin-top: 0.15rem;">{notif['message']}</div>
+</div>
+</div>""", unsafe_allow_html=True)
+
+    # 4. Metric Cards Row
+    m1, m2, m3, m4 = st.columns(4)
+
+    with m1:
+        st.markdown(f"""<div style="background: #FFFFFF; border: 1px solid #EAE4D5; border-radius: 20px; padding: 1.75rem 1.25rem; text-align: center; height: 180px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 16px rgba(45,52,37,0.03);">
+<div style="font-family: 'Playfair Display', Georgia, serif; font-size: 3.2rem; font-weight: 700; color: #C84B31; line-height: 1;">{summary['total_count']}</div>
+<div style="font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px; color: #5A644D; margin-top: 0.75rem; text-transform: uppercase;">INGREDIENTS</div>
+</div>""", unsafe_allow_html=True)
+
+    with m2:
+        alert_badge = '<div style="position: absolute; top: 12px; right: 12px; background: #C84B31; color: white; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 8px;">Alert</div>' if summary['expiring_count'] > 0 else ''
+        st.markdown(f"""<div style="position: relative; background: #FFFFFF; border: 1px solid #EAE4D5; border-radius: 20px; padding: 1.75rem 1.25rem; text-align: center; height: 180px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 16px rgba(45,52,37,0.03);">
+{alert_badge}
+<div style="font-family: 'Playfair Display', Georgia, serif; font-size: 3.2rem; font-weight: 700; color: #C84B31; line-height: 1;">{summary['expiring_count']}</div>
+<div style="font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px; color: #5A644D; margin-top: 0.75rem; text-transform: uppercase;">USE SOON</div>
+</div>""", unsafe_allow_html=True)
+
+    with m3:
+        st.markdown(f"""<div style="background: #FFFFFF; border: 1px solid #EAE4D5; border-radius: 20px; padding: 1.75rem 1.25rem; text-align: center; height: 180px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 16px rgba(45,52,37,0.03);">
+<div style="font-family: 'Playfair Display', Georgia, serif; font-size: 3.2rem; font-weight: 700; color: #C84B31; line-height: 1;">{saved_count}</div>
+<div style="font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px; color: #5A644D; margin-top: 0.75rem; text-transform: uppercase;">SAVED RECIPES</div>
+</div>""", unsafe_allow_html=True)
+
+    with m4:
+        score = summary['zero_waste_score']
+        rescue_msg = f"{summary['expiring_count']} items require rescue" if summary['expiring_count'] > 0 else "Pantry freshness is optimal!"
+        st.markdown(f"""<div style="background: #FFFFFF; border: 1px solid #EAE4D5; border-radius: 20px; padding: 1.5rem 1.25rem; height: 180px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 16px rgba(45,52,37,0.03);">
+<div style="font-family: 'Playfair Display', Georgia, serif; font-size: 1.25rem; font-weight: 600; color: #2D3425;">Zero-Waste Goal</div>
+<div>
+<div style="background: #EBE5D6; border-radius: 10px; height: 10px; overflow: hidden; width: 100%;">
+<div style="background: #556B2F; height: 100%; width: {score}%;"></div>
+</div>
+<div style="text-align: right; font-size: 0.85rem; font-weight: 600; color: #556B2F; margin-top: 0.4rem;">{score}% Utilized</div>
+</div>
+<div style="font-size: 0.8rem; color: #7B856E;">{rescue_msg}</div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+
+    # 5. Food Preferences Card
+    st.markdown("""
+        <div style="background: #FFFFFF; border: 1px solid #EAE4D5; border-radius: 20px; padding: 1.75rem; box-shadow: 0 4px 16px rgba(45,52,37,0.03);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem;">
+                <span style="font-size: 1.2rem;">⚙️</span>
+                <h3 style="font-family: 'Playfair Display', Georgia, serif; font-size: 1.4rem; color: #2D3425; margin: 0;">
+                    Food Preferences & Taste Profile
+                </h3>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    pref = user.preferences
+    current_cuisines = pref.get("cuisines", ["Italian", "Indian", "Mexican"])
+    current_diet = pref.get("dietary", ["Vegetarian"])
+    current_spice = pref.get("spice_level", "Medium")
+
+    with st.expander("✏️ Customize Your Culinary Preferences", expanded=False):
+        all_cuisines = ["Indian", "Italian", "Mexican", "Thai", "Chinese", "Mediterranean", "Japanese", "French", "American"]
+        selected_cuisines = st.multiselect("Favorite Cuisines", all_cuisines, default=[c for c in current_cuisines if c in all_cuisines])
+        
+        all_diets = ["Vegetarian", "Non-vegetarian", "Vegan", "Dairy-Free", "Gluten-Free", "Nut-Free", "Keto", "Halal", "Kosher"]
+        selected_diets = st.multiselect("Dietary Requirements", all_diets, default=[d for d in current_diet if d in all_diets])
+        
+        selected_spice = st.select_slider("Preferred Spice Level", ["Mild", "Medium", "Spicy", "Hot"], value=current_spice if current_spice in ["Mild", "Medium", "Spicy", "Hot"] else "Medium")
+        
+        if st.button("Save Preferences", type="primary"):
+            new_prefs = {
+                "cuisines": selected_cuisines,
+                "dietary": selected_diets,
+                "spice_level": selected_spice,
+                "default_servings": pref.get("default_servings", 2),
+                "prioritized_ingredients": pref.get("prioritized_ingredients", []),
+                "avoided_ingredients": pref.get("avoided_ingredients", [])
+            }
+            update_user_preferences(user.id, new_prefs)
+            user.preferences = new_prefs
+            st.session_state.authenticated_user = user
+            st.success("Preferences updated!")
+            st.rerun()
+
+    # 6. Personalized Recommendations Section
+    if recommendations.get("rescue_ideas"):
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style="background: #F4EFE2; border: 1px solid #E2D9C5; border-radius: 16px; padding: 1.25rem 1.5rem; margin-top: 1rem;">
+                <h4 style="font-family: 'Playfair Display', serif; color: #2D3425; margin: 0 0 0.5rem 0;">
+                    💡 Chef's Zero-Waste Rescue Ideas
+                </h4>
+                <ul style="margin: 0; padding-left: 1.25rem; color: #4E593D; line-height: 1.6;">
+                    {''.join(f'<li>{idea}</li>' for idea in recommendations['rescue_ideas'])}
+                </ul>
+            </div>
+        """, unsafe_allow_html=True)

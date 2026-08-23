@@ -9,10 +9,10 @@ def render_feastbook_component():
         """
         <div style="margin-bottom: 20px;">
             <h1 style="color: #ffffff; font-size: 28px; font-weight: 800; margin: 0 0 6px 0;">
-                Your Feastbook
+                Saved recipes
             </h1>
             <p style="color: #cbd5e1; font-size: 15px; margin: 0;">
-                Your personal cookbook of favorite zero-waste recipes.
+                The recipes you want to make again.
             </p>
         </div>
         """,

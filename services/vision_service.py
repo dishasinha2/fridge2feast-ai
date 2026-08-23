@@ -1,115 +1,134 @@
-import io
+"""Gemini Vision Service for Fridge and Pantry Ingredient Recognition."""
 import json
-import time
-from typing import List, Optional
-from PIL import Image
-from pydantic import BaseModel, Field, ValidationError
-from google.genai import types
-from services.gemini_client import invoke_gemini_with_retry, GeminiServiceException, _record_telemetry_event
-from prompts.ingredient_detection import (
-    INGREDIENT_VISION_SYSTEM_INSTRUCTION,
-    INGREDIENT_VISION_PROMPT,
-)
+import re
+import logging
+from typing import List, Dict, Any, Tuple
+from utils.validation import validate_image_bytes, validate_detected_ingredient
+from services.gemini_client import get_gemini_client
 
-# Pydantic Schemas for Structured JSON response from Gemini
-class IngredientItemSchema(BaseModel):
-    name: str = Field(description="Name of the food item")
-    category: str = Field(description="Category: Vegetables, Fruits, Dairy & Eggs, Proteins & Meat, Grains & Pasta, Condiments & Sauces, Pantry & Spices, Beverages")
-    estimated_quantity: str = Field(description="Estimated quantity or count")
-    confidence: float = Field(description="Confidence value between 0.0 and 1.0")
-    confidence_label: str = Field(description="High, Medium, or Low")
-    freshness_hint: str = Field(description="Approximate freshness guidance, never an exact expiry date")
+logger = logging.getLogger(__name__)
 
-class VisionAnalysisResponseSchema(BaseModel):
-    is_food_image: bool = Field(default=False)
-    ingredients: List[IngredientItemSchema] = Field(default_factory=list)
-    uncertain_items: List[str] = Field(default_factory=list)
-    non_food_items_detected: List[str] = Field(default_factory=list)
-    summary: str = Field(default="No usable food or fridge contents were detected.")
+VISION_PROMPT = """
+You are Fridge2Feast AI, an expert computer vision model for refrigerator and pantry food detection.
+Analyze this photo of a refrigerator or pantry. Identify ALL distinct food ingredients, produce, dairy, proteins, condiments, and pantry items visible in the image.
 
-def analyze_fridge_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+For each detected ingredient, output a strictly valid JSON array of objects with the following keys:
+- "name": string, clear singular/standardized food name (e.g. "Tomatoes", "Milk", "Eggs", "Cheddar Cheese", "Bell Pepper", "Spinach", "Tofu")
+- "category": one of ["Produce", "Dairy", "Protein", "Pantry", "Condiments", "Bakery", "Other"]
+- "estimated_quantity": number (e.g. 1, 2, 0.5)
+- "unit": one of ["pcs", "g", "kg", "ml", "l", "bunch", "can", "cup", "tbsp", "tsp", "pack", "slice", "handful", "item"]
+- "freshness_status": based on visual inspection, one of ["USE TODAY", "USE SOON", "FRESH"]
+- "estimated_shelf_life_days": integer estimated remaining days until optimal freshness expires
+- "storage_recommendation": brief practical storage tip (e.g. "Store in high humidity crisper drawer")
+- "confidence": float between 0.0 and 1.0 representing detection confidence
+
+Output ONLY the raw JSON array. Do NOT wrap in markdown backticks or include introductory or concluding commentary.
+"""
+
+def analyze_fridge_image(image_bytes: bytes, filename: str = "", mime_type: str = "") -> Tuple[bool, List[Dict[str, Any]], str]:
     """
-    Calls Gemini Vision model with the in-memory fridge image and structured schema.
-    Processes in memory only — never writes raw image bytes to disk.
-    If analysis fails or structured validation fails, handles cleanly without dumping raw JSON.
+    Validate image and send to Gemini Vision for structured ingredient detection.
+    Returns (success, list_of_validated_ingredients, user_facing_error_message).
     """
-    if not image_bytes:
-        raise GeminiServiceException("No image data provided. Please upload or take a photo.", is_transient=False)
-    if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
-        raise GeminiServiceException("Please upload a supported JPG, PNG, or WEBP image.", is_transient=False)
+    # 1. Strict image validation
+    is_valid_img, img_err = validate_image_bytes(image_bytes, filename, mime_type)
+    if not is_valid_img:
+        return False, [], img_err
 
+    # 2. Call Gemini
     try:
-        with Image.open(io.BytesIO(image_bytes)) as image:
-            image.verify()
-        with Image.open(io.BytesIO(image_bytes)) as image:
-            width, height = image.size
-    except Exception:
-        raise GeminiServiceException("This image could not be decoded. Please try another photo.", is_transient=False)
+        client = get_gemini_client()
+        detected_raw = None
 
-    if width < 64 or height < 64 or width > 10000 or height > 10000:
-        raise GeminiServiceException("Please use an image with reasonable dimensions.", is_transient=False)
+        # Check client type (Google GenAI official SDK vs fallback)
+        if hasattr(client, "models") and hasattr(client.models, "generate_content"):
+            from google.genai import types
+            
+            # Detect mime type if not provided
+            if not mime_type:
+                if image_bytes.startswith(b"\xFF\xD8\xFF"):
+                    mime_type = "image/jpeg"
+                elif image_bytes.startswith(b"\x89PNG"):
+                    mime_type = "image/png"
+                elif image_bytes.startswith(b"RIFF"):
+                    mime_type = "image/webp"
+                else:
+                    mime_type = "image/jpeg"
 
-    image_part = types.Part.from_bytes(
-        data=image_bytes,
-        mime_type=mime_type,
-    )
+            part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+            try:
+                response = client.models.generate_content(
+                    model="gemini-flash-latest",
+                    contents=[VISION_PROMPT, part],
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,
+                        response_mime_type="application/json"
+                    )
+                )
+            except Exception as model_err:
+                logger.warning(f"Primary vision model failed, falling back to gemini-flash-lite-latest: {model_err}")
+                response = client.models.generate_content(
+                    model="gemini-flash-lite-latest",
+                    contents=[VISION_PROMPT, part],
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,
+                        response_mime_type="application/json"
+                    )
+                )
+            detected_raw = response.text
+        else:
+            # Legacy google.generativeai fallback
+            import PIL.Image
+            import io
+            img = PIL.Image.open(io.BytesIO(image_bytes))
+            model = client.GenerativeModel("gemini-1.5-flash")
+            response = model.generate_content([VISION_PROMPT, img])
+            detected_raw = response.text
 
-    # Invoke centralized Gemini client with automatic bounded retry & error translation
-    response_text = invoke_gemini_with_retry(
-        contents=[image_part, INGREDIENT_VISION_PROMPT],
-        system_instruction=INGREDIENT_VISION_SYSTEM_INSTRUCTION,
-        response_mime_type="application/json",
-        response_schema=VisionAnalysisResponseSchema,
-        temperature=0.2,
-        max_retries=3,
-    )
+        if not detected_raw:
+            return False, [], "No ingredients could be detected in this image. Please try taking a clearer photo."
 
-    try:
-        data = json.loads(response_text)
-        # Validate against Pydantic schema
-        validated_obj = VisionAnalysisResponseSchema(**data)
-        data = validated_obj.model_dump()
-    except (json.JSONDecodeError, ValidationError) as ve:
-        _record_telemetry_event(success=False, latency_ms=0, validation_error=True)
-        raise GeminiServiceException(
-            "We couldn't confidently interpret the scan. Please try another photo.",
-            error_code=422,
-            is_transient=False
-            ,error_category="SCHEMA_VALIDATION_ERROR"
-        )
+        # Parse JSON
+        cleaned_text = detected_raw.strip()
+        # Remove any stray codeblocks if model added them
+        if cleaned_text.startswith("```"):
+            cleaned_text = re.sub(r"^```(?:json)?", "", cleaned_text)
+            cleaned_text = re.sub(r"```$", "", cleaned_text)
+            cleaned_text = cleaned_text.strip()
 
-    # Format ingredients with unique IDs and 'included' flag for pandas DataFrame use
-    ingredients_list = []
-    raw_ingredients = data.get("ingredients", [])
+        data = json.loads(cleaned_text)
+        if isinstance(data, dict):
+            # If wrapped in a key like {"ingredients": [...]}
+            for key in ["ingredients", "items", "detected_ingredients", "data"]:
+                if key in data and isinstance(data[key], list):
+                    data = data[key]
+                    break
+            if isinstance(data, dict):
+                data = [data]
 
-    if not data.get("is_food_image", False):
-        return {
-            "ingredients": [],
-            "uncertain_items": [],
-            "non_food_items_detected": data.get("non_food_items_detected", []),
-            "summary": "No usable food or fridge contents were detected.",
-            "is_food_image": False,
-        }
-    
-    for idx, item in enumerate(raw_ingredients):
-        name = item.get("name", "").strip()
-        if not name:
-            continue
-        ingredients_list.append({
-            "id": f"detected-{int(time.time())}-{idx}",
-            "name": name,
-            "category": item.get("category", "Pantry & Spices"),
-            "estimated_quantity": item.get("estimated_quantity", "1 item"),
-            "confidence": float(item.get("confidence", 0.85)),
-            "confidence_label": item.get("confidence_label", "High"),
-            "freshness_hint": item.get("freshness_hint", "AI-estimated freshness guidance — check package labels and food condition."),
-            "included": True,
-        })
+        if not isinstance(data, list):
+            return False, [], "Ingredient scanning is temporarily unavailable. Please try again."
 
-    return {
-        "ingredients": ingredients_list,
-        "uncertain_items": data.get("uncertain_items", []),
-        "non_food_items_detected": data.get("non_food_items_detected", []),
-        "summary": data.get("summary", f"Detected {len(ingredients_list)} food items in your fridge photo."),
-        "is_food_image": True,
-    }
+        # Validate and deduplicate items
+        validated_items: List[Dict[str, Any]] = []
+        seen_names = set()
+
+        for item in data:
+            is_valid, norm_item, _ = validate_detected_ingredient(item)
+            if is_valid:
+                norm_name = norm_item["name"].lower()
+                if norm_name not in seen_names:
+                    seen_names.add(norm_name)
+                    validated_items.append(norm_item)
+
+        if not validated_items:
+            return False, [], "No valid ingredients identified in the photo. Please try a different angle."
+
+        return True, validated_items, ""
+
+    except json.JSONDecodeError as je:
+        logger.error(f"JSON parsing error from Gemini vision: {je}")
+        return False, [], "Ingredient scanning is temporarily unavailable. Please try again."
+    except Exception as e:
+        logger.error(f"Error in analyze_fridge_image: {e}")
+        return False, [], "Ingredient scanning is temporarily unavailable. Please try again."

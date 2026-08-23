@@ -1,155 +1,181 @@
-import io
+"""Scanner Component with Gemini Vision & Review Workflow."""
 import streamlit as st
-from PIL import Image
 from services.vision_service import analyze_fridge_image
-from services.gemini_client import GeminiServiceException
+from services.kitchen_service import batch_add_ingredients
+from utils.validation import VALID_CATEGORIES, VALID_UNITS
 
-def render_scanner_component():
-    """
-    Renders the private fridge scanner with live camera and image upload.
-    All images are processed strictly in-memory (never written to disk).
-    Keeps uploaded images in memory and shows only friendly consumer messages.
-    """
-    st.markdown("<h2 style='color: #ffffff; font-weight: 900;'>What's in your fridge?</h2>", unsafe_allow_html=True)
-    st.markdown(
-        "<p style='color: #94a3b8; font-size: 14px; margin-bottom: 20px;'>"
-        "Take a photo and we'll identify the ingredients you can cook with."
-        "</p>",
-        unsafe_allow_html=True
-    )
+def render_scanner():
+    """Render the Refrigerator & Pantry Scanner with Gemini Vision and User Review."""
+    user = st.session_state.authenticated_user
+    if not user:
+        st.session_state.current_page = "landing"
+        st.rerun()
 
-    # Food safety disclosure
-    st.markdown(
-        """
-        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #334155; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px;">
-            <span style="font-size: 12px; color: #fbbf24; font-weight: 800;">⚠️ Food Safety & AI Estimation Notice:</span>
-            <p style="font-size: 12px; color: #94a3b8; margin: 4px 0 0 0; line-height: 1.4;">
-                Visual AI cannot reliably determine food microbiological safety, bacterial presence, or exact expiry. Always check physical aroma, storage conditions, packaging use-by dates, and official food safety guidelines.
+    st.markdown("""
+        <div style="margin-bottom: 1.5rem;">
+            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 2.4rem; color: #2D3425; margin-bottom: 0.2rem; font-style: italic;">
+                📷 Refrigerator & Pantry Scanner
+            </h1>
+            <p style="font-size: 1.05rem; color: #5A644D; margin: 0;">
+                Snap or upload a photo of your fridge or pantry. Gemini AI will identify food items and estimate freshness shelf-life.
             </p>
         </div>
-        """,
-        unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
 
-    st.markdown("### Upload or capture your fridge image")
+    # Initialize review state if not set
+    if "pending_scan_items" not in st.session_state:
+        st.session_state.pending_scan_items = None
 
-    # Load in-memory cached image if present
-    cached_image_bytes = st.session_state.get("scanner_in_memory_image")
-    cached_image_mime = st.session_state.get("scanner_in_memory_mime", "image/jpeg")
+    # If pending items exist, show Review & Confirmation Screen
+    if st.session_state.pending_scan_items is not None:
+        render_review_screen(user.id)
+        return
 
-    col1, col2 = st.columns(2)
-    with col1:
+    # Scanner input tabs
+    tab_upload, tab_camera = st.tabs(["📁 Upload Photo", "📷 Take Photo with Camera"])
+
+    image_bytes = None
+    filename = ""
+    mime_type = ""
+
+    with tab_upload:
         uploaded_file = st.file_uploader(
-            "Upload Fridge Photo",
+            "Choose a refrigerator or pantry photo (JPG, PNG, WEBP — Max 10MB)",
             type=["jpg", "jpeg", "png", "webp"],
-            help="Select an image file of your open fridge or food items."
+            help="Upload a clear photo of your fridge shelves, crisper drawer, or pantry."
         )
         if uploaded_file is not None:
-            new_bytes = uploaded_file.getvalue()
-            if new_bytes != cached_image_bytes:
-                st.session_state.scanner_in_memory_image = new_bytes
-                st.session_state.scanner_in_memory_mime = uploaded_file.type or "image/jpeg"
-                st.session_state.scanner_status = "idle"
-                st.session_state.scanner_error_message = None
+            image_bytes = uploaded_file.getvalue()
+            filename = uploaded_file.name
+            mime_type = uploaded_file.type
+            st.image(image_bytes, caption="Uploaded Photo Preview", use_container_width=True)
 
-    with col2:
-        camera_file = st.camera_input("Take Photo of Fridge")
+    with tab_camera:
+        camera_file = st.camera_input("Take a photo of your fridge")
         if camera_file is not None:
-            new_bytes = camera_file.getvalue()
-            if new_bytes != cached_image_bytes:
-                st.session_state.scanner_in_memory_image = new_bytes
-                st.session_state.scanner_in_memory_mime = "image/jpeg"
-                st.session_state.scanner_status = "idle"
-                st.session_state.scanner_error_message = None
+            image_bytes = camera_file.getvalue()
+            filename = "camera_snapshot.jpg"
+            mime_type = "image/jpeg"
 
-    current_bytes = st.session_state.get("scanner_in_memory_image")
-    current_mime = st.session_state.get("scanner_in_memory_mime", "image/jpeg")
-
-    if current_bytes is not None:
-        try:
-            image_preview = Image.open(io.BytesIO(current_bytes))
-        except Exception:
-            image_preview = None
-
-        if image_preview is not None:
-            st.markdown("<hr style='border-color: #334155; margin: 20px 0;'>", unsafe_allow_html=True)
-            pcol1, pcol2 = st.columns([1, 2])
-            with pcol1:
-                st.image(image_preview, caption="Ready to review", width="stretch")
-            with pcol2:
-                st.markdown("#### Image ready for analysis")
-                st.write("We’ll identify food items, categories, and estimated quantities for you to confirm.")
-
-                # If previous scan failed, show the error card
-                if st.session_state.get("scanner_status") == "failed":
-                    error_msg = st.session_state.get("scanner_error_message") or "The AI service is experiencing high demand.\nYour image was not processed."
-                    
-                    st.markdown(
-                        f"""
-                        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                                <span style="font-size: 20px;">✨</span>
-                                <span style="color: #f87171; font-weight: 800; font-size: 15px;">We couldn't analyse that image</span>
-                            </div>
-                            <p style="color: #cbd5e1; font-size: 13px; margin: 0; line-height: 1.5; white-space: pre-line;">
-                                {error_msg}
-                            </p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                    if st.button("Try again", key="scanner_retry_btn", type="primary", width="stretch"):
-                        _run_fridge_analysis(current_bytes, current_mime)
-
+    if image_bytes:
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        if st.button("✨ Analyze with Gemini Vision", type="primary", use_container_width=True):
+            with st.spinner("Analyzing ingredients with Gemini Multimodal AI..."):
+                success, items, err_msg = analyze_fridge_image(image_bytes, filename, mime_type)
+                if not success:
+                    st.error(err_msg)
                 else:
-                    if st.button("Analyse my fridge", key="scanner_scan_btn", type="primary", width="stretch"):
-                        _run_fridge_analysis(current_bytes, current_mime)
-        else:
-            st.error("This image could not be decoded. Please upload another photo.")
+                    st.session_state.pending_scan_items = items
+                    st.success(f"Detected {len(items)} ingredients! Please review before saving.")
+                    st.rerun()
 
-def _run_fridge_analysis(image_bytes: bytes, mime_type: str):
-    """
-    Executes in-memory Gemini analysis with spinner and error capture.
-    """
-    with st.spinner("Analysing your ingredients…"):
-        try:
-            results = analyze_fridge_image(image_bytes, mime_type=mime_type)
-            detected = results.get("ingredients", [])
-            st.session_state.detected_ingredients = detected
-            st.session_state.uncertain_items = results.get("uncertain_items", [])
-            st.session_state.non_food_items = results.get("non_food_items_detected", [])
-            st.session_state.vision_summary = results.get("summary", "")
-            st.session_state.is_food_image = results.get("is_food_image", False)
-            st.session_state.scanner_status = "success"
-            st.session_state.scanner_error_message = None
+def render_review_screen(user_id: int):
+    """Render the user review and batch confirmation screen."""
+    items = st.session_state.pending_scan_items or []
+
+    st.markdown("""
+        <div style="background: #FFFFFF; border: 1px solid #EAE4D5; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="font-family: 'Playfair Display', serif; color: #2D3425; margin: 0 0 0.5rem 0;">
+                📝 Review Detected Ingredients
+            </h3>
+            <p style="color: #68735A; font-size: 0.95rem; margin: 0;">
+                Review each recognized item below. You can adjust quantities, categories, or shelf-life before confirming.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if not items:
+        st.info("No items in review batch.")
+        if st.button("Return to Scanner"):
+            st.session_state.pending_scan_items = None
+            st.rerun()
+        return
+
+    updated_items = []
+    items_to_remove = []
+
+    for idx, item in enumerate(items):
+        with st.container():
+            c1, c2, c3, c4, c5, c6 = st.columns([2.2, 1.5, 1.0, 1.2, 1.5, 0.6])
             
-            # Record initial detected count for HITL audit
-            st.session_state.hitl_vision_audit = {
-                "initial_detected_count": len(detected),
-                "confirmed_count": len(detected),
-                "edited_count": 0,
-                "removed_count": 0,
-                "added_count": 0,
-                "raw_detected_names": [i["name"] for i in detected],
-            }
-            
-            if not results.get("is_food_image", False):
-                st.session_state.scanner_status = "success"
-                st.warning("Please upload a clear photo of your fridge or food ingredients.")
-            else:
-                st.success(f"Analysis complete. Detected {len(detected)} food items.")
-            st.session_state.active_tab = "Inventory"
+            with c1:
+                name = st.text_input(f"Item #{idx+1}", value=item.get("name", ""), key=f"rev_name_{idx}")
+            with c2:
+                cat = st.selectbox("Category", VALID_CATEGORIES, index=VALID_CATEGORIES.index(item.get("category", "Produce")) if item.get("category") in VALID_CATEGORIES else 0, key=f"rev_cat_{idx}")
+            with c3:
+                qty = st.number_input("Qty", min_value=0.1, value=float(item.get("quantity", item.get("estimated_quantity", 1))), step=0.5, key=f"rev_qty_{idx}")
+            with c4:
+                unit = st.selectbox("Unit", VALID_UNITS, index=VALID_UNITS.index(item.get("unit", "pcs")) if item.get("unit") in VALID_UNITS else 0, key=f"rev_unit_{idx}")
+            with c5:
+                shelf = st.number_input("Days Left", min_value=0, max_value=365, value=int(item.get("estimated_shelf_life_days", 5)), key=f"rev_shelf_{idx}")
+            with c6:
+                st.markdown("<div style='height: 1.75rem;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"del_rev_{idx}", help="Remove this item"):
+                    items_to_remove.append(idx)
+
+            updated_items.append({
+                "name": name,
+                "category": cat,
+                "quantity": qty,
+                "unit": unit,
+                "estimated_shelf_life_days": shelf,
+                "storage_advice": item.get("storage_advice", "Store properly in refrigerator."),
+                "confidence": item.get("confidence", 0.95)
+            })
+
+    # Filter removed items
+    if items_to_remove:
+        st.session_state.pending_scan_items = [item for i, item in enumerate(updated_items) if i not in items_to_remove]
+        st.rerun()
+
+    # Option to add a missing ingredient to this batch
+    with st.expander("➕ Add an ingredient missed in the scan"):
+        ac1, ac2, ac3, ac4 = st.columns(4)
+        with ac1:
+            m_name = st.text_input("Ingredient Name", key="m_add_name")
+        with ac2:
+            m_cat = st.selectbox("Category", VALID_CATEGORIES, key="m_add_cat")
+        with ac3:
+            m_qty = st.number_input("Quantity", min_value=0.5, value=1.0, step=0.5, key="m_add_qty")
+        with ac4:
+            m_unit = st.selectbox("Unit", VALID_UNITS, key="m_add_unit")
+        
+        if st.button("Add to Review Batch"):
+            if m_name.strip():
+                updated_items.append({
+                    "name": m_name.strip(),
+                    "category": m_cat,
+                    "quantity": m_qty,
+                    "unit": m_unit,
+                    "estimated_shelf_life_days": 5,
+                    "storage_advice": "Store in refrigerator.",
+                    "confidence": 1.0
+                })
+                st.session_state.pending_scan_items = updated_items
+                st.rerun()
+
+    st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+    
+    col_save, col_cancel = st.columns([2, 1])
+    with col_save:
+        if st.button("✅ Confirm & Save All to My Kitchen", type="primary", use_container_width=True):
+            added = batch_add_ingredients(user_id, updated_items)
+            st.session_state.pending_scan_items = None
+            if not added:
+                st.error("No ingredients could be saved. Please review the scan and try again.")
+                return
+            st.session_state.last_scan_ingredients = [
+                {"id": item.id, "name": item.name, "quantity": item.quantity,
+                 "unit": item.unit, "freshness_status": item.freshness_status,
+                 "days_remaining": item.days_remaining, "expiry_date": item.expiry_date}
+                for item in added
+            ]
+            st.session_state.generated_recipe = None
+            st.session_state.recipe_flow_stage = "scan_complete"
+            st.session_state.current_page = "recipes"
             st.rerun()
 
-        except GeminiServiceException as gse:
-            st.session_state.scanner_status = "failed"
-            st.session_state.scanner_error_message = gse.user_message
-            st.session_state.scanner_is_transient_error = gse.is_transient
-            st.rerun()
-
-        except Exception as err:
-            st.session_state.scanner_status = "failed"
-            st.session_state.scanner_error_message = "The AI service is experiencing high demand.\nYour image was not processed."
-            st.session_state.scanner_is_transient_error = True
+    with col_cancel:
+        if st.button("❌ Cancel Scan", use_container_width=True):
+            st.session_state.pending_scan_items = None
             st.rerun()

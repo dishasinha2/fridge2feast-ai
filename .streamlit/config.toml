@@ -1,25 +1,17 @@
-[theme]
-base = "dark"
-primaryColor = "#E8B94E"
-backgroundColor = "#0B2B26"
-secondaryBackgroundColor = "#123F38"
-textColor = "#F4EFE6"
-borderColor = "#31574F"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-headingFont = "Fraunces:https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700;900&display=swap"
-baseRadius = "medium"
-buttonRadius = "medium"
-showWidgetBorder = true
-greenColor = "#86B59A"
-orangeColor = "#E8734E"
-chartCategoricalColors = ["#E8B94E", "#E8734E", "#86B59A", "#B9C7C0", "#D2A88D"]
-
 [server]
 port = 3000
 address = "0.0.0.0"
 headless = true
 enableCORS = false
 enableXsrfProtection = false
+maxUploadSize = 10
+
+[theme]
+primaryColor = "#C84B31"
+backgroundColor = "#FBF8F1"
+secondaryBackgroundColor = "#F3EEDF"
+textColor = "#2D3425"
+font = "serif"
 
 [browser]
 gatherUsageStats = false

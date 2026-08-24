@@ -2,7 +2,26 @@
 import streamlit as st
 from services.vision_service import analyze_fridge_image
 from services.kitchen_service import batch_add_ingredients
-from utils.validation import VALID_CATEGORIES, VALID_UNITS
+from utils.validation import VALID_CATEGORIES, VALID_UNITS, validate_detected_ingredient
+
+
+def confirm_scan_items(user_id: int, reviewed_items: list[dict]) -> tuple[list, list[dict]]:
+    """Persist only validated, user-reviewed scan items and build recipe handoff data."""
+    validated_items = []
+    for item in reviewed_items:
+        is_valid, normalized, _ = validate_detected_ingredient(item)
+        if not is_valid:
+            return [], []
+        validated_items.append(normalized)
+
+    added = batch_add_ingredients(user_id, validated_items)
+    handoff = [
+        {"id": item.id, "name": item.name, "quantity": item.quantity,
+         "unit": item.unit, "freshness_status": item.freshness_status,
+         "days_remaining": item.days_remaining, "expiry_date": item.expiry_date}
+        for item in added
+    ]
+    return added, handoff
 
 def render_scanner():
     """Render the Refrigerator & Pantry Scanner with Gemini Vision and User Review."""
@@ -21,10 +40,6 @@ def render_scanner():
             </p>
         </div>
     """, unsafe_allow_html=True)
-
-    # Initialize review state if not set
-    if "pending_scan_items" not in st.session_state:
-        st.session_state.pending_scan_items = None
 
     # If pending items exist, show Review & Confirmation Screen
     if st.session_state.pending_scan_items is not None:
@@ -65,6 +80,8 @@ def render_scanner():
                 if not success:
                     st.error(err_msg)
                 else:
+                    st.session_state.latest_scan = items
+                    st.session_state.scan_confirmed = False
                     st.session_state.pending_scan_items = items
                     st.success(f"Detected {len(items)} ingredients! Please review before saving.")
                     st.rerun()
@@ -159,17 +176,14 @@ def render_review_screen(user_id: int):
     col_save, col_cancel = st.columns([2, 1])
     with col_save:
         if st.button("✅ Confirm & Save All to My Kitchen", type="primary", use_container_width=True):
-            added = batch_add_ingredients(user_id, updated_items)
+            added, handoff = confirm_scan_items(user_id, updated_items)
             st.session_state.pending_scan_items = None
             if not added:
                 st.error("No ingredients could be saved. Please review the scan and try again.")
                 return
-            st.session_state.last_scan_ingredients = [
-                {"id": item.id, "name": item.name, "quantity": item.quantity,
-                 "unit": item.unit, "freshness_status": item.freshness_status,
-                 "days_remaining": item.days_remaining, "expiry_date": item.expiry_date}
-                for item in added
-            ]
+            st.session_state.last_scan_ingredients = handoff
+            st.session_state.latest_scan = st.session_state.last_scan_ingredients
+            st.session_state.scan_confirmed = True
             st.session_state.generated_recipe = None
             st.session_state.recipe_flow_stage = "scan_complete"
             st.session_state.current_page = "recipes"

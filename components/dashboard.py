@@ -1,11 +1,12 @@
 """Authenticated Dashboard Component for Fridge2Feast AI."""
 import streamlit as st
 from datetime import datetime
-from services.kitchen_service import get_kitchen_summary, get_expiring_ingredients
+from services.kitchen_service import get_kitchen_summary, get_expiring_ingredients, get_user_ingredients
 from services.recipe_service import get_saved_recipes
 from services.recommendation_service import get_personalized_recommendations
 from services.notification_service import get_user_notifications, mark_notification_read
 from services.auth_service import update_user_preferences
+from utils.pandas_utils import inventory_to_freshness_df, kitchen_insight_frames
 from textwrap import dedent
 
 def get_greeting() -> str:
@@ -73,7 +74,7 @@ def render_section_navigation():
         }
         </style>
     """, unsafe_allow_html=True)
-    pages = [("Home", "dashboard"), ("Scanner", "scanner"), ("Kitchen", "kitchen"), ("Recipes", "recipes"), ("Saved", "saved")]
+    pages = [("Home", "dashboard"), ("Scanner", "scanner"), ("Kitchen", "kitchen"), ("Recipes", "recipes"), ("Saved", "saved"), ("Analytics", "analytics")]
     page_labels = [label for label, _ in pages]
     current_label = next(label for label, page in pages if page == st.session_state.current_page)
     with st.container(key="section-navigation"):
@@ -182,6 +183,32 @@ def render_dashboard():
         score = summary['zero_waste_score']
         render_metric_card("♻️", f"{score}%", "Zero-Waste Goal")
 
+    inventory_df = inventory_to_freshness_df(get_user_ingredients(user.id))
+    if not inventory_df.empty:
+        st.markdown("### Kitchen insights")
+        filter_a, filter_b = st.columns(2)
+        with filter_a:
+            freshness_filter = st.selectbox("Freshness", ["All", "USE TODAY", "USE SOON", "FRESH"], key="dashboard_freshness_filter")
+        with filter_b:
+            category_filter = st.selectbox("Category", ["All"] + sorted(inventory_df["category"].unique().tolist()), key="dashboard_category_filter")
+        filtered_df = inventory_df.copy()
+        if freshness_filter != "All":
+            filtered_df = filtered_df[filtered_df["freshness_status"] == freshness_filter]
+        if category_filter != "All":
+            filtered_df = filtered_df[filtered_df["category"] == category_filter]
+        insights = kitchen_insight_frames(filtered_df)
+        chart_a, chart_b = st.columns(2)
+        with chart_a:
+            with st.container(border=True):
+                st.caption("Freshness distribution")
+                st.bar_chart(insights["freshness"], x="Freshness", y="Ingredients")
+        with chart_b:
+            with st.container(border=True):
+                st.caption("Ingredient categories")
+                st.bar_chart(insights["categories"], x="Category", y="Ingredients")
+    else:
+        st.info("Kitchen insights will appear after you scan your fridge or add an ingredient.")
+
     st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
 
     # 5. Food Preferences Card
@@ -238,3 +265,8 @@ def render_dashboard():
                 </ul>
             </div>
         """), unsafe_allow_html=True)
+
+    ranked_recipes = recommendations.get("ranked_recipes", [])
+    if ranked_recipes:
+        top = ranked_recipes[0]
+        st.caption(f"Suggested saved recipe: {top['recipe'].title} — {top['explanation']}")

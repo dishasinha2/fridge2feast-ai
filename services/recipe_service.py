@@ -2,10 +2,11 @@
 import json
 import re
 import logging
+from collections import Counter
 from typing import List, Dict, Any, Optional, Tuple
 from utils.database import get_db_connection
 from services.kitchen_service import get_user_ingredients, get_expiring_ingredients
-from services.gemini_client import get_gemini_client
+from services.gemini_client import generate_json_content, get_gemini_client
 from models.recipe import Recipe
 
 logger = logging.getLogger(__name__)
@@ -29,11 +30,12 @@ USER PREFERENCES & PARAMETERS:
 - Target Cooking Time: {cooking_time_minutes} minutes
 - Additional User Request/Notes: {custom_prompt}
 - Latest confirmed scan (use this context alongside the complete inventory): {latest_scan_text}
+- Relevant, anonymous cooking context: {history_text}
 
 CRITICAL RULES:
 1. Prioritize using the EXPIRING ingredients first to prevent food waste.
-2. In "available_ingredients", ONLY include items that actually appear in the USER INVENTORY list above. Never claim an item is in their kitchen if it is not listed.
-3. In "additional_ingredients", list only pantry staples (e.g. olive oil, salt, black pepper, water) or minimal optional additions not found in their inventory.
+2. "available_ingredients" is the **From Your Kitchen** section. ONLY include items that actually appear in the USER INVENTORY list above. Never claim an item is in their kitchen if it is not listed.
+3. "additional_ingredients" is the **You May Need** section. List only pantry staples (e.g. olive oil, salt, black pepper, water) or minimal optional additions not found in their inventory.
 4. Ensure instructions are clear, step-by-step, and numbered sequentially.
 5. Provide a "waste_saved_score" (integer between 60 and 100) reflecting how effectively this recipe rescues expiring food.
 6. Dietary safety is mandatory: Vegetarian excludes meat and seafood; Vegan excludes meat, seafood, eggs, dairy, and all animal-derived ingredients. Non-Vegetarian may use meat or seafood only when appropriate.
@@ -69,6 +71,35 @@ Output a strictly valid JSON object matching this exact schema:
 
 Output ONLY the raw JSON object. Do not include markdown code block syntax or exterior commentary.
 """
+
+
+def _parse_recipe_payload(raw_text: str) -> Dict[str, Any]:
+    """Validate untrusted Gemini JSON before it is displayed or persisted."""
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?", "", cleaned)
+        cleaned = re.sub(r"```$", "", cleaned).strip()
+    data = json.loads(cleaned)
+    if not isinstance(data, dict):
+        raise ValueError("Recipe response must be a JSON object")
+
+    title = data.get("title")
+    steps = data.get("instructions")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError("Recipe response is missing title")
+    if not isinstance(steps, list) or not steps or not all(isinstance(step, str) and step.strip() for step in steps):
+        raise ValueError("Recipe response has invalid instructions")
+    for field in ("available_ingredients", "additional_ingredients"):
+        value = data.get(field)
+        if not isinstance(value, list) or not all(isinstance(item, dict) and str(item.get("name", "")).strip() for item in value):
+            raise ValueError(f"Recipe response has invalid {field}")
+    for field in ("cooking_time_minutes", "servings"):
+        try:
+            if int(data.get(field)) <= 0:
+                raise ValueError
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Recipe response has invalid {field}") from error
+    return data
 
 def generate_recipe(
     user_id: int,
@@ -106,6 +137,19 @@ def generate_recipe(
     ]
     expiring_text = "\n".join(expiring_lines) if expiring_lines else "None (all ingredients are fresh)."
     latest_scan_text = json.dumps(latest_scanned_ingredients or [], ensure_ascii=False)
+    history = get_cooking_history(user_id)
+    saved = get_saved_recipes(user_id)
+    history_cuisines = [row.get("cuisine") for row in history if row.get("cuisine")]
+    saved_cuisines = [recipe.cuisine for recipe in saved if recipe.cuisine]
+    repeated_cuisines = [
+        cuisine_name for cuisine_name, count in Counter(history_cuisines + saved_cuisines).items()
+        if count >= 2
+    ]
+    history_text = (
+        f"Repeated cuisine preferences inferred from at least two saved/cooked recipes: {', '.join(repeated_cuisines)}."
+        if repeated_cuisines
+        else "No repeated cooking pattern is available; rely on the current kitchen and explicit preferences."
+    )
 
     prompt = RECIPE_PROMPT_TEMPLATE.format(
         inventory_text=inventory_text,
@@ -116,55 +160,22 @@ def generate_recipe(
         diet=diet,
         spice_level=spice_level,
         cooking_time_minutes=cooking_time_minutes,
-        custom_prompt=custom_prompt or "Create a balanced, tasty zero-waste meal."
-        ,latest_scan_text=latest_scan_text
+        custom_prompt=custom_prompt or "Create a balanced, tasty zero-waste meal.",
+        latest_scan_text=latest_scan_text,
+        history_text=history_text,
     )
 
     try:
-        client = get_gemini_client()
-        raw_text = None
-
-        if hasattr(client, "models") and hasattr(client.models, "generate_content"):
-            # Keep the official google-genai configuration when installed.  The
-            # fallback also makes the wrapper testable with its existing client seam.
-            try:
-                from google.genai import types
-                config = types.GenerateContentConfig(
-                    temperature=0.4, response_mime_type="application/json"
-                )
-            except ImportError:
-                config = {"temperature": 0.4, "response_mime_type": "application/json"}
-            try:
-                response = client.models.generate_content(
-                    model="gemini-flash-latest",
-                    contents=prompt,
-                    config=config
-                )
-            except Exception as model_err:
-                logger.warning(f"Primary recipe model failed, falling back to gemini-flash-lite-latest: {model_err}")
-                response = client.models.generate_content(
-                    model="gemini-flash-lite-latest",
-                    contents=prompt,
-                    config=config
-                )
-            raw_text = response.text
-        else:
-            model = client.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(prompt)
-            raw_text = response.text
+        raw_text = generate_json_content(
+            prompt, temperature=0.4, client=get_gemini_client()
+        )
 
         if not raw_text:
             return None, "Recipe generation is temporarily unavailable. Please try again."
 
-        cleaned = raw_text.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?", "", cleaned)
-            cleaned = re.sub(r"```$", "", cleaned)
-            cleaned = cleaned.strip()
+        data = _parse_recipe_payload(raw_text)
 
-        data = json.loads(cleaned)
-
-        title = str(data.get("title", "Chef's Kitchen Creation")).strip()
+        title = data["title"].strip()
         desc = str(data.get("description", "")).strip()
         # Preferences are constraints, not suggestions; keep the persisted recipe
         # aligned with the request even if the model echoes different metadata.
@@ -172,16 +183,13 @@ def generate_recipe(
         res_meal = meal_type
         dietary_tags = [diet] if diet != "No Preference" else (data.get("dietary_tags", []) if isinstance(data.get("dietary_tags"), list) else [])
         res_spice = spice_level
-        res_time = min(int(data.get("cooking_time_minutes", cooking_time_minutes)), cooking_time_minutes)
+        res_time = min(int(data["cooking_time_minutes"]), cooking_time_minutes)
         res_servings = servings
         available_ing = data.get("available_ingredients", [])
         additional_ing = data.get("additional_ingredients", [])
         instructions = data.get("instructions", [])
         tips = data.get("tips", [])
         waste_score = int(data.get("waste_saved_score", 85))
-
-        if not instructions or not isinstance(instructions, list):
-            return None, "Recipe generation produced incomplete instructions. Please try again."
 
         # Gemini may suggest ingredients liberally. Enforce the SQLite inventory
         # boundary before anything is displayed or saved.
@@ -248,10 +256,13 @@ def generate_recipe(
         return recipe, ""
 
     except json.JSONDecodeError as je:
-        logger.error(f"Failed to parse recipe JSON: {je}")
+        logger.error("Failed to parse recipe JSON: %s", je)
+        return None, "Recipe generation is temporarily unavailable. Please try again."
+    except ValueError as validation_error:
+        logger.error("Gemini recipe response failed validation: %s", validation_error)
         return None, "Recipe generation is temporarily unavailable. Please try again."
     except Exception as e:
-        logger.error(f"Recipe generation error: {e}")
+        logger.error("Recipe generation error: %s", type(e).__name__)
         return None, "Recipe generation is temporarily unavailable. Please try again."
 
 def save_recipe(user_id: int, recipe_id: int) -> bool:

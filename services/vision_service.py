@@ -4,7 +4,7 @@ import re
 import logging
 from typing import List, Dict, Any, Tuple
 from utils.validation import validate_image_bytes, validate_detected_ingredient
-from services.gemini_client import get_gemini_client
+from services.gemini_client import generate_json_content, get_gemini_client
 
 logger = logging.getLogger(__name__)
 
@@ -56,26 +56,9 @@ def analyze_fridge_image(image_bytes: bytes, filename: str = "", mime_type: str 
                     mime_type = "image/jpeg"
 
             part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-            try:
-                response = client.models.generate_content(
-                    model="gemini-flash-latest",
-                    contents=[VISION_PROMPT, part],
-                    config=types.GenerateContentConfig(
-                        temperature=0.2,
-                        response_mime_type="application/json"
-                    )
-                )
-            except Exception as model_err:
-                logger.warning(f"Primary vision model failed, falling back to gemini-flash-lite-latest: {model_err}")
-                response = client.models.generate_content(
-                    model="gemini-flash-lite-latest",
-                    contents=[VISION_PROMPT, part],
-                    config=types.GenerateContentConfig(
-                        temperature=0.2,
-                        response_mime_type="application/json"
-                    )
-                )
-            detected_raw = response.text
+            detected_raw = generate_json_content(
+                [VISION_PROMPT, part], temperature=0.2, client=client
+            )
         else:
             # Legacy google.generativeai fallback
             import PIL.Image
@@ -127,8 +110,8 @@ def analyze_fridge_image(image_bytes: bytes, filename: str = "", mime_type: str 
         return True, validated_items, ""
 
     except json.JSONDecodeError as je:
-        logger.error(f"JSON parsing error from Gemini vision: {je}")
+        logger.error("Gemini vision response was not valid JSON: %s", je)
         return False, [], "Ingredient scanning is temporarily unavailable. Please try again."
     except Exception as e:
-        logger.error(f"Error in analyze_fridge_image: {e}")
+        logger.error("Gemini vision request failed: %s", type(e).__name__)
         return False, [], "Ingredient scanning is temporarily unavailable. Please try again."

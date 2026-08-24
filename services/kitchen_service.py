@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional
 from utils.database import get_db_connection
 from utils.calculations import calculate_freshness, calculate_expiry_date, calculate_zero_waste_score
 from utils.validation import normalize_ingredient_name, VALID_CATEGORIES, VALID_UNITS
+from utils.pandas_utils import inventory_to_freshness_df
 from models.ingredient import Ingredient
 
 def get_user_ingredients(
@@ -240,10 +241,11 @@ def get_kitchen_summary(user_id: int) -> Dict[str, Any]:
     Calculate kitchen counts strictly from SQLite for the authenticated user.
     """
     ingredients = get_user_ingredients(user_id)
-    total_count = len(ingredients)
-    use_today_count = sum(1 for item in ingredients if item.days_remaining <= 0)
-    use_soon_count = sum(1 for item in ingredients if 1 <= item.days_remaining <= 2)
-    fresh_count = sum(1 for item in ingredients if item.days_remaining >= 3)
+    inventory_df = inventory_to_freshness_df(ingredients)
+    total_count = len(inventory_df)
+    use_today_count = int((inventory_df["days_remaining"] <= 0).sum()) if not inventory_df.empty else 0
+    use_soon_count = int(inventory_df["days_remaining"].between(1, 2).sum()) if not inventory_df.empty else 0
+    fresh_count = int((inventory_df["days_remaining"] >= 3).sum()) if not inventory_df.empty else 0
     expiring_count = use_today_count + use_soon_count
 
     # Calculate zero waste score based on fresh items vs expiring items

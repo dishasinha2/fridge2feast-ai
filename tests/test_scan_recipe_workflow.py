@@ -77,3 +77,34 @@ def test_empty_kitchen_and_gemini_failure_are_safe(monkeypatch):
     monkeypatch.setattr("services.recipe_service.get_gemini_client", lambda: (_ for _ in ()).throw(RuntimeError("no service")))
     recipe, error = generate_recipe(user.id)
     assert recipe is None and error == "Recipe generation is temporarily unavailable. Please try again."
+
+
+def test_prompt_carries_every_recipe_preference_and_zero_waste_rules(monkeypatch):
+    user, _ = signup_user("prompt@example.com", "Prompt Chef", "Password123")
+    add_ingredient(user.id, {"name": "Spinach", "category": "Produce", "quantity": 1, "unit": "bunch", "estimated_shelf_life_days": 1})
+    client = FakeClient(payload([{"name": "Spinach"}]))
+    monkeypatch.setattr("services.recipe_service.get_gemini_client", lambda: client)
+
+    recipe, error = generate_recipe(
+        user.id, servings=3, meal_type="Lunch", cuisine="Thai", diet="Vegan",
+        spice_level="Mild", cooking_time_minutes=20, custom_prompt="Use one pan.",
+    )
+
+    assert recipe is not None and not error
+    for expected in ("Requested Servings: 3", "Meal Type: Lunch", "Target Cuisine: Thai",
+                     "Dietary Preference: Vegan", "Preferred Spice Level: Mild",
+                     "Target Cooking Time: 20 minutes", "Use one pan.",
+                     "From Your Kitchen", "You May Need", "Prioritize using the EXPIRING"):
+        assert expected in client.models.prompt
+
+
+def test_malformed_recipe_response_is_never_saved(monkeypatch):
+    user, _ = signup_user("malformed@example.com", "Safe Chef", "Password123")
+    add_ingredient(user.id, {"name": "Potato", "category": "Produce", "quantity": 2, "unit": "pcs", "estimated_shelf_life_days": 2})
+    monkeypatch.setattr("services.recipe_service.get_gemini_client", lambda: FakeClient('{"title": "Broken"}'))
+
+    recipe, error = generate_recipe(user.id)
+
+    assert recipe is None
+    assert error == "Recipe generation is temporarily unavailable. Please try again."
+    assert get_saved_recipes(user.id) == []

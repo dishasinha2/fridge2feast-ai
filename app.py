@@ -3,6 +3,7 @@ Turn What's Left Into What's Next.
 """
 import streamlit as st
 from utils.database import init_db
+from utils.session_state import clear_user_session_state, initialize_session_state
 from components.landing import render_landing
 from components.auth import render_auth
 from components.dashboard import render_dashboard
@@ -11,6 +12,7 @@ from components.kitchen import render_kitchen
 from components.recipes import render_recipes
 from components.saved import render_saved
 from components.cooking import render_cooking
+from components.analytics import render_analytics_component
 
 # Page Configuration
 st.set_page_config(
@@ -147,21 +149,7 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # Initialize database tables
 init_db()
 
-# Initialize Session State Variables
-if "authenticated_user" not in st.session_state:
-    st.session_state.authenticated_user = None
-
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "landing"
-
-if "auth_view" not in st.session_state:
-    st.session_state.auth_view = "login"
-
-# Journey state only; authenticated inventory remains in SQLite.
-st.session_state.setdefault("last_scan_ingredients", [])
-st.session_state.setdefault("recipe_preferences", {})
-st.session_state.setdefault("generated_recipe", None)
-st.session_state.setdefault("recipe_flow_stage", "preferences")
+initialize_session_state(st.session_state)
 
 def render_top_navigation():
     """Render top application navigation bar with wide responsive layout."""
@@ -184,15 +172,7 @@ def render_top_navigation():
 
         with c_out:
             if st.button("Logout", key="top_logout", width="content"):
-                st.session_state.authenticated_user = None
-                st.session_state.current_page = "landing"
-                st.session_state.active_recipe = None
-                st.session_state.pending_scan_items = None
-                st.session_state.last_scan_ingredients = []
-                st.session_state.recipe_preferences = {}
-                st.session_state.generated_recipe = None
-                st.session_state.cooking_recipe = None
-                st.session_state.current_step_idx = 0
+                clear_user_session_state(st.session_state)
                 st.rerun()
 
     st.markdown("<div style='border-bottom: 1px solid #EAE4D5; margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
@@ -227,6 +207,8 @@ def main():
         render_recipes()
     elif page == "saved":
         render_saved()
+    elif page == "analytics":
+        render_analytics_component()
     elif page == "cooking":
         render_cooking()
     else:

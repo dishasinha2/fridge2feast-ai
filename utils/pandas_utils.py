@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import List, Dict, Any, Optional
 import datetime
+from utils.calculations import calculate_freshness
 
 # Shelf-life assumptions in days based on typical kitchen/refrigerator pantry storage
 SHELF_LIFE_DAYS = {
@@ -61,6 +62,58 @@ SHELF_LIFE_DAYS = {
     "sauce": 60,
     "soy sauce": 180,
 }
+
+def inventory_to_freshness_df(ingredients: List[Any]) -> pd.DataFrame:
+    """Normalize authenticated inventory into a DataFrame using the active freshness rules."""
+    columns = ["id", "name", "category", "quantity", "unit", "added_date", "expiry_date", "days_remaining", "freshness_status"]
+    if not ingredients:
+        return pd.DataFrame(columns=columns)
+
+    records = []
+    for item in ingredients:
+        if isinstance(item, dict):
+            get_value = item.get
+        else:
+            get_value = lambda key, default=None: getattr(item, key, default)
+
+        name = str(get_value("name", "")).strip()
+        added_date = get_value("added_date", "")
+        try:
+            shelf_life = max(0, int(get_value("estimated_shelf_life_days", 0) or 0))
+        except (TypeError, ValueError):
+            shelf_life = 0
+        status, days_remaining, expiry_date = calculate_freshness(added_date, shelf_life)
+        try:
+            quantity = float(get_value("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            quantity = 0.0
+        records.append({
+            "id": get_value("id"),
+            "name": name,
+            "category": str(get_value("category", "Other") or "Other"),
+            "quantity": quantity,
+            "unit": str(get_value("unit", "") or ""),
+            "added_date": pd.to_datetime(added_date, errors="coerce"),
+            "expiry_date": pd.to_datetime(expiry_date, errors="coerce"),
+            "days_remaining": days_remaining,
+            "freshness_status": status,
+        })
+    return pd.DataFrame(records, columns=columns)
+
+
+def kitchen_insight_frames(inventory_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """Return chart-ready frames from the authenticated inventory DataFrame only."""
+    empty_freshness = pd.DataFrame(columns=["Freshness", "Ingredients"])
+    empty_categories = pd.DataFrame(columns=["Category", "Ingredients"])
+    if inventory_df is None or inventory_df.empty:
+        return {"freshness": empty_freshness, "categories": empty_categories}
+    freshness = inventory_df["freshness_status"].value_counts().reindex(
+        ["USE TODAY", "USE SOON", "FRESH"], fill_value=0
+    ).reset_index()
+    freshness.columns = ["Freshness", "Ingredients"]
+    categories = inventory_df["category"].value_counts().reset_index()
+    categories.columns = ["Category", "Ingredients"]
+    return {"freshness": freshness, "categories": categories}
 
 def estimate_ingredient_freshness(name: str, category: str = "", estimated_quantity: str = "") -> Dict[str, Any]:
     """

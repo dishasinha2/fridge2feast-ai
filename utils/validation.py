@@ -1,6 +1,9 @@
 """Validation utilities for Image files and Data schemas."""
 import re
+from io import BytesIO
 from typing import Tuple, Dict, Any, List
+
+from PIL import Image, UnidentifiedImageError
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
@@ -46,13 +49,20 @@ def validate_image_bytes(file_bytes: bytes, filename: str = "", mime_type: str =
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         return False, f"File size ({len(file_bytes)/(1024*1024):.1f} MB) exceeds maximum allowed 10 MB limit."
 
-    # Binary signature check
+    # Binary signature check, followed by decoder verification. A matching header
+    # alone is not enough: corrupted/truncated image bytes must never reach Gemini.
     is_jpeg = file_bytes.startswith(b"\xFF\xD8\xFF")
     is_png = file_bytes.startswith(b"\x89PNG\r\n\x1a\n")
     is_webp = len(file_bytes) >= 12 and file_bytes[:4] == b"RIFF" and file_bytes[8:12] == b"WEBP"
 
     if not (is_jpeg or is_png or is_webp):
         return False, "Invalid image format. Only real JPEG, PNG, and WebP files are supported."
+
+    try:
+        with Image.open(BytesIO(file_bytes)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError):
+        return False, "Image data is corrupted or unreadable. Please choose another photo."
 
     if filename:
         ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -87,12 +97,13 @@ def validate_detected_ingredient(item: Dict[str, Any]) -> Tuple[bool, Dict[str, 
     if category not in VALID_CATEGORIES:
         category = "Other"
 
+    raw_quantity = item.get("estimated_quantity", item.get("quantity"))
     try:
-        qty = float(item.get("estimated_quantity", item.get("quantity", 1)))
+        qty = float(raw_quantity)
         if qty <= 0:
-            qty = 1.0
+            return False, {}, "Ingredient quantity must be positive."
     except (ValueError, TypeError):
-        qty = 1.0
+        return False, {}, "Ingredient quantity is missing or invalid."
 
     unit = str(item.get("unit", "pcs")).strip().lower()
     if unit not in VALID_UNITS:
@@ -139,4 +150,3 @@ def validate_ingredient_batch(raw_items: List[Any]) -> List[Dict[str, Any]]:
         if is_val:
             valid_items.append(norm)
     return valid_items
-

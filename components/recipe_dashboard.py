@@ -89,13 +89,13 @@ def render_recipe_dashboard_component():
             
             b_col1, b_col2 = st.columns(2)
             with b_col1:
-                if st.button("Start cooking", key=f"deck_cook_{idx}", type="primary" if idx == 0 else "secondary", use_container_width=True):
+                if st.button("Start cooking", key=f"deck_cook_{idx}", type="primary" if idx == 0 else "secondary", width="stretch"):
                     st.session_state.cooking_recipe = recipe
                     st.session_state.cooking_step = 0
                     st.session_state.active_tab = "Cooking Mode"
                     st.rerun()
             with b_col2:
-                if st.button("View recipe", key=f"deck_view_{idx}", use_container_width=True):
+                if st.button("View recipe", key=f"deck_view_{idx}", width="stretch"):
                     st.session_state.selected_recipe = recipe
                     st.rerun()
 
@@ -236,7 +236,7 @@ def render_recipe_dashboard_component():
     act_col1, act_col2, act_col3 = st.columns([1.5, 1.2, 1.2])
 
     with act_col1:
-        if st.button("Start interactive cooking", type="primary", use_container_width=True):
+        if st.button("Start interactive cooking", type="primary", width="stretch"):
             st.session_state.cooking_recipe = selected
             st.session_state.cooking_step = 0
             st.session_state.active_tab = "Cooking Mode"
@@ -246,7 +246,7 @@ def render_recipe_dashboard_component():
         saved_list = st.session_state.get("saved_recipes", [])
         is_saved = any(s.get("title") == selected.get("title") for s in saved_list)
         btn_label = "❤️ Saved in Feastbook" if is_saved else "💾 Save to Feastbook"
-        if st.button(btn_label, use_container_width=True):
+        if st.button(btn_label, width="stretch"):
             if not is_saved:
                 st.session_state.saved_recipes.append(selected)
                 taste = st.session_state.get("taste_profile", {})
@@ -256,7 +256,7 @@ def render_recipe_dashboard_component():
                 st.rerun()
 
     with act_col3:
-        if st.button("🛒 View Shopping List", use_container_width=True):
+        if st.button("🛒 View Shopping List", width="stretch"):
             st.session_state.shopping_recipe = selected
             st.session_state.active_tab = "Shopping List"
             st.rerun()

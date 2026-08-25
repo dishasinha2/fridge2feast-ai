@@ -4,7 +4,7 @@ import io
 import json
 from PIL import Image
 from utils.validation import validate_image_bytes, validate_ingredient_batch
-from services.vision_service import analyze_fridge_image
+from services.vision_service import analyze_fridge_image, prepare_image_for_vision
 
 def test_image_validation_valid_jpeg():
     # Create valid in-memory JPEG
@@ -35,6 +35,18 @@ def test_image_validation_valid_webp():
     is_valid, err = validate_image_bytes(buf.getvalue(), "fridge.webp", "image/webp")
     assert is_valid is True
     assert err == ""
+
+
+def test_large_upload_is_downsized_to_a_fast_jpeg_payload():
+    image = Image.new("RGB", (4000, 3000), color="green")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+
+    optimized, mime_type = prepare_image_for_vision(buffer.getvalue())
+
+    assert mime_type == "image/jpeg"
+    with Image.open(io.BytesIO(optimized)) as output:
+        assert max(output.size) == 1600
 
 def test_image_validation_invalid_signature():
     fake_bytes = b"NOT_A_REAL_IMAGE_BYTES"

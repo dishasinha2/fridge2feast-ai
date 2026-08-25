@@ -36,7 +36,7 @@ def render_saved():
         """, unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1.5, 1])
         with col2:
-            if st.button("🍳 Generate Recipes", type="primary", use_container_width=True):
+            if st.button("🍳 Generate Recipes", type="primary", width="stretch"):
                 st.session_state.current_page = "recipes"
                 st.rerun()
         return
@@ -66,17 +66,17 @@ def render_saved():
 
             c1, c2, c3 = st.columns([1.5, 1.5, 1])
             with c1:
-                if st.button("🍳 Cook Step-by-Step", key=f"cook_{recipe.id}", type="primary", use_container_width=True):
+                if st.button("🍳 Cook Step-by-Step", key=f"cook_{recipe.id}", type="primary", width="stretch"):
                     st.session_state.cooking_recipe = recipe
                     st.session_state.current_page = "cooking"
                     st.rerun()
             with c2:
-                if st.button("📖 View Full Recipe", key=f"view_{recipe.id}", use_container_width=True):
+                if st.button("📖 View Full Recipe", key=f"view_{recipe.id}", width="stretch"):
                     st.session_state.active_recipe = recipe
                     st.session_state.current_page = "recipes"
                     st.rerun()
             with c3:
-                if st.button("🗑️ Remove", key=f"unsave_{recipe.id}", use_container_width=True):
+                if st.button("🗑️ Remove", key=f"unsave_{recipe.id}", width="stretch"):
                     unsave_recipe(user.id, recipe.id)
                     st.success(f"Removed '{recipe.title}' from saved recipes.")
                     st.rerun()

@@ -38,7 +38,7 @@ def render_kitchen_agent_component():
             """,
             unsafe_allow_html=True
         )
-        if st.button("📸 Scan my fridge", type="primary", use_container_width=True):
+        if st.button("📸 Scan my fridge", type="primary", width="stretch"):
             st.session_state.active_tab = "Scanner"
             st.rerun()
         return
@@ -73,7 +73,7 @@ def render_kitchen_agent_component():
     for idx, (label, val) in enumerate(c_options):
         with c_cols[idx]:
             is_sel = (val.lower() in current_craving.lower() or current_craving.lower() in val.lower())
-            if st.button(label, key=f"crav_opt_{idx}", use_container_width=True, type="primary" if is_sel else "secondary"):
+            if st.button(label, key=f"crav_opt_{idx}", width="stretch", type="primary" if is_sel else "secondary"):
                 st.session_state.meal_context["craving"] = val
                 st.rerun()
 
@@ -92,7 +92,7 @@ def render_kitchen_agent_component():
     for idx, (label, val) in enumerate(meal_options):
         with m_cols[idx]:
             is_sel = (val.lower() in current_meal.lower() or current_meal.lower() in val.lower())
-            if st.button(label, key=f"meal_opt_{idx}", use_container_width=True, type="primary" if is_sel else "secondary"):
+            if st.button(label, key=f"meal_opt_{idx}", width="stretch", type="primary" if is_sel else "secondary"):
                 st.session_state.meal_context["meal_type"] = val
                 st.rerun()
 
@@ -106,7 +106,7 @@ def render_kitchen_agent_component():
     for idx, opt in enumerate(hunger_options):
         with h_cols[idx]:
             is_sel = (opt.lower() == current_hunger.lower())
-            if st.button(opt, key=f"hunger_opt_{idx}", use_container_width=True, type="primary" if is_sel else "secondary"):
+            if st.button(opt, key=f"hunger_opt_{idx}", width="stretch", type="primary" if is_sel else "secondary"):
                 st.session_state.meal_context["hunger_level"] = opt
                 st.rerun()
 
@@ -161,7 +161,7 @@ def render_kitchen_agent_component():
     st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
 
     # FINAL ACTION BUTTON: FIND MY MEAL
-    if st.button("Find my meal →", type="primary", use_container_width=True):
+    if st.button("Find my meal →", type="primary", width="stretch"):
         with st.spinner("Finding the best 3 recipe options for your kitchen..."):
             try:
                 pref_payload = {

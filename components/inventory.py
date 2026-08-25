@@ -99,7 +99,7 @@ def render_inventory_component():
                     """,
                     unsafe_allow_html=True
                 )
-                if st.button(f"🍳 Cook {name} First", key=f"inv_cook_{name}_{idx}", use_container_width=True):
+                if st.button(f"🍳 Cook {name} First", key=f"inv_cook_{name}_{idx}", width="stretch"):
                     st.session_state.meal_context["craving"] = f"Using {name}"
                     st.session_state.active_tab = "Kitchen Agent"
                     st.rerun()
@@ -201,6 +201,6 @@ def render_inventory_component():
 
     # Call to action to proceed to Kitchen Agent
     st.markdown("<hr style='border-color: #334155; margin: 25px 0;'>", unsafe_allow_html=True)
-    if st.button("🤖 Proceed to AI Kitchen Decision Agent →", type="primary", use_container_width=True):
+    if st.button("🤖 Proceed to AI Kitchen Decision Agent →", type="primary", width="stretch"):
         st.session_state.active_tab = "Kitchen Agent"
         st.rerun()

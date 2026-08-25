@@ -36,7 +36,7 @@ def render_rescue_component():
             """,
             unsafe_allow_html=True
         )
-        if st.button("📸 Scan my fridge", type="primary", use_container_width=True):
+        if st.button("📸 Scan my fridge", type="primary", width="stretch"):
             st.session_state.active_tab = "Scanner"
             st.rerun()
         return
@@ -98,9 +98,9 @@ def render_rescue_component():
         with card_col2:
             is_reminded = any(r.get("ingredient") == name for r in reminders)
             if is_reminded:
-                st.button("🔔 Reminded", key=f"rescue_rem_{item.get('id', idx)}", disabled=True, use_container_width=True)
+                st.button("🔔 Reminded", key=f"rescue_rem_{item.get('id', idx)}", disabled=True, width="stretch")
             else:
-                if st.button("Remind me", key=f"rescue_rem_{item.get('id', idx)}", use_container_width=True):
+                if st.button("Remind me", key=f"rescue_rem_{item.get('id', idx)}", width="stretch"):
                     st.session_state.active_reminders.append({
                         "ingredient": name,
                         "urgency": urgency,
@@ -112,7 +112,7 @@ def render_rescue_component():
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
 
     # CTA: Create rescue plan
-    if st.button("✨ Create zero-waste rescue plan", type="primary", use_container_width=True):
+    if st.button("✨ Create zero-waste rescue plan", type="primary", width="stretch"):
         with st.spinner("Finding the best recipe combination for your perishable items..."):
             try:
                 plan = generate_rescue_plan(

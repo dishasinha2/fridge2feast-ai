@@ -90,7 +90,7 @@ def render_kitchen():
         
         btn_col1, btn_col2, btn_col3 = st.columns([1, 1.5, 1])
         with btn_col2:
-            if st.button("📷 Scan My Fridge", type="primary", use_container_width=True):
+            if st.button("📷 Scan My Fridge", type="primary", width="stretch"):
                 st.session_state.current_page = "scanner"
                 st.rerun()
         return

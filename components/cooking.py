@@ -99,17 +99,17 @@ def render_cooking():
     n_col1, n_col2, n_col3 = st.columns([1, 1.5, 1])
 
     with n_col1:
-        if st.button("◀ Previous Step", disabled=(step_idx == 0), use_container_width=True):
+        if st.button("◀ Previous Step", disabled=(step_idx == 0), width="stretch"):
             st.session_state.current_step_idx = max(0, step_idx - 1)
             st.rerun()
 
     with n_col2:
         if step_idx + 1 < total_steps:
-            if st.button("Next Step ▶", type="primary", use_container_width=True):
+            if st.button("Next Step ▶", type="primary", width="stretch"):
                 st.session_state.current_step_idx = step_idx + 1
                 st.rerun()
         else:
-            if st.button("🎉 Finish & Log to History", type="primary", use_container_width=True):
+            if st.button("🎉 Finish & Log to History", type="primary", width="stretch"):
                 record_cooking_history(
                     user_id=user.id,
                     recipe_title=recipe.title,
@@ -125,7 +125,7 @@ def render_cooking():
                 st.rerun()
 
     with n_col3:
-        if st.button("Exit Cooking", use_container_width=True):
+        if st.button("Exit Cooking", width="stretch"):
             st.session_state.cooking_recipe = None
             st.session_state.current_step_idx = 0
             st.session_state.current_page = "recipes"

@@ -24,6 +24,13 @@ def render_recipes():
             if st.button("Add Ingredients", width="stretch"):
                 st.session_state.current_page = "kitchen"; st.rerun()
         return
+    if st.session_state.get("rescue_mode"):
+        st.title("Rescue ingredients first")
+        st.caption("Create a recipe that prioritizes ingredients which need using soon.")
+        if st.button("Back to dashboard", icon=":material/home:", width="content", key="rescue_back_dashboard"):
+            st.session_state.rescue_mode = False
+            st.session_state.current_page = "dashboard"
+            st.rerun()
     if st.session_state.get("recipe_flow_stage") == "scan_complete":
         st.title("What's cooking tonight?")
         st.write("Use what you just scanned to create a meal that fits your taste.")

@@ -39,17 +39,17 @@ def render_planner_component():
         current_days = st.session_state.get("planner_days", 3)
         
         with d_col1:
-            if st.button("1 Day Plan", key="p_dur_1", type="primary" if current_days == 1 else "secondary", use_container_width=True):
+            if st.button("1 Day Plan", key="p_dur_1", type="primary" if current_days == 1 else "secondary", width="stretch"):
                 st.session_state.planner_days = 1
                 st.session_state.planner_goal = "Daily Smart Plan"
                 st.rerun()
         with d_col2:
-            if st.button("3 Days (Recommended)", key="p_dur_3", type="primary" if current_days == 3 else "secondary", use_container_width=True):
+            if st.button("3 Days (Recommended)", key="p_dur_3", type="primary" if current_days == 3 else "secondary", width="stretch"):
                 st.session_state.planner_days = 3
                 st.session_state.planner_goal = "Zero-Waste Balanced"
                 st.rerun()
         with d_col3:
-            if st.button("7 Days Full Week", key="p_dur_7", type="primary" if current_days == 7 else "secondary", use_container_width=True):
+            if st.button("7 Days Full Week", key="p_dur_7", type="primary" if current_days == 7 else "secondary", width="stretch"):
                 st.session_state.planner_days = 7
                 st.session_state.planner_goal = "Weekly Balanced"
                 st.rerun()
@@ -59,7 +59,7 @@ def render_planner_component():
         
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        if st.button(f"✨ Plan {active_days} days of meals", type="primary", use_container_width=True):
+        if st.button(f"✨ Plan {active_days} days of meals", type="primary", width="stretch"):
             with st.spinner(f"Designing a {active_days}-day kitchen timeline for your pantry..."):
                 try:
                     plan = generate_ai_meal_planner(
@@ -152,7 +152,7 @@ def render_planner_component():
         l_dish = st.text_input("What cooked leftover do you have?", placeholder="e.g. Cooked rice, roasted chicken, yellow dal")
         l_extras = st.text_input("Any pantry items on hand?", placeholder="e.g. Eggs, onions, tortillas, cheese, herbs")
 
-        if st.button("Transform leftovers into a new meal", type="primary", use_container_width=True):
+        if st.button("Transform leftovers into a new meal", type="primary", width="stretch"):
             if not l_dish:
                 st.warning("Please enter a leftover dish to transform.")
             else:

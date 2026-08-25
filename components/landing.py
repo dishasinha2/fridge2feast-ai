@@ -24,12 +24,12 @@ def render_landing():
     with col2:
         c_a, c_b = st.columns(2)
         with c_a:
-            if st.button("🚀 Get Started / Sign Up", use_container_width=True, type="primary"):
+            if st.button("🚀 Get Started / Sign Up", width="stretch", type="primary"):
                 st.session_state.auth_view = "signup"
                 st.session_state.current_page = "auth"
                 st.rerun()
         with c_b:
-            if st.button("🔑 Log In", use_container_width=True):
+            if st.button("🔑 Log In", width="stretch"):
                 st.session_state.auth_view = "login"
                 st.session_state.current_page = "auth"
                 st.rerun()

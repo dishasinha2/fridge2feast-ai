@@ -84,7 +84,7 @@ def render_shopping_list_component():
             data=csv_data,
             file_name="fridge2feast_shopping_list.csv",
             mime="text/csv",
-            use_container_width=True
+            width="stretch"
         )
 
     with col2:
@@ -93,7 +93,7 @@ def render_shopping_list_component():
             data=txt_data,
             file_name="fridge2feast_shopping_list.txt",
             mime="text/plain",
-            use_container_width=True
+            width="stretch"
         )
 
     with col3:
@@ -102,5 +102,5 @@ def render_shopping_list_component():
             data=md_data,
             file_name="fridge2feast_shopping_list.md",
             mime="text/markdown",
-            use_container_width=True
+            width="stretch"
         )

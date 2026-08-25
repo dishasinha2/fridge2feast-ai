@@ -41,6 +41,10 @@ def render_scanner():
         </div>
     """, unsafe_allow_html=True)
 
+    if st.button("Back to dashboard", icon=":material/home:", width="content"):
+        st.session_state.current_page = "dashboard"
+        st.rerun()
+
     # If pending items exist, show Review & Confirmation Screen
     if st.session_state.pending_scan_items is not None:
         render_review_screen(user.id)
@@ -63,7 +67,7 @@ def render_scanner():
             image_bytes = uploaded_file.getvalue()
             filename = uploaded_file.name
             mime_type = uploaded_file.type
-            st.image(image_bytes, caption="Uploaded Photo Preview", use_container_width=True)
+            st.image(image_bytes, caption="Uploaded Photo Preview", width="stretch")
 
     with tab_camera:
         camera_file = st.camera_input("Take a photo of your fridge")
@@ -74,8 +78,8 @@ def render_scanner():
 
     if image_bytes:
         st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
-        if st.button("✨ Analyze with Gemini Vision", type="primary", use_container_width=True):
-            with st.spinner("Analyzing ingredients with Gemini Multimodal AI..."):
+        if st.button("✨ Analyze with Gemini Vision", type="primary", width="stretch"):
+            with st.spinner("Preparing photo and identifying ingredients..."):
                 success, items, err_msg = analyze_fridge_image(image_bytes, filename, mime_type)
                 if not success:
                     st.error(err_msg)
@@ -100,6 +104,11 @@ def render_review_screen(user_id: int):
             </p>
         </div>
     """, unsafe_allow_html=True)
+
+    if st.button("Back to dashboard", icon=":material/home:", width="content", key="review_back_dashboard"):
+        st.session_state.pending_scan_items = None
+        st.session_state.current_page = "dashboard"
+        st.rerun()
 
     if not items:
         st.info("No items in review batch.")
@@ -175,7 +184,7 @@ def render_review_screen(user_id: int):
     
     col_save, col_cancel = st.columns([2, 1])
     with col_save:
-        if st.button("✅ Confirm & Save All to My Kitchen", type="primary", use_container_width=True):
+        if st.button("✅ Confirm & Save All to My Kitchen", type="primary", width="stretch"):
             added, handoff = confirm_scan_items(user_id, updated_items)
             st.session_state.pending_scan_items = None
             if not added:
@@ -190,6 +199,6 @@ def render_review_screen(user_id: int):
             st.rerun()
 
     with col_cancel:
-        if st.button("❌ Cancel Scan", use_container_width=True):
+        if st.button("❌ Cancel Scan", width="stretch"):
             st.session_state.pending_scan_items = None
             st.rerun()

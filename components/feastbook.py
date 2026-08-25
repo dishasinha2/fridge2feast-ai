@@ -36,7 +36,7 @@ def render_feastbook_component():
             """,
             unsafe_allow_html=True
         )
-        if st.button("🍳 Explore recipe suggestions", type="primary", use_container_width=True):
+        if st.button("🍳 Explore recipe suggestions", type="primary", width="stretch"):
             st.session_state.active_tab = "Recipe Dashboard"
             st.rerun()
         return
@@ -96,13 +96,13 @@ def render_feastbook_component():
 
             btn_col1, btn_col2 = st.columns([2, 1])
             with btn_col1:
-                if st.button("Cook again", key=f"fb_cook_{r.get('id', idx)}", type="primary", use_container_width=True):
+                if st.button("Cook again", key=f"fb_cook_{r.get('id', idx)}", type="primary", width="stretch"):
                     st.session_state.cooking_recipe = r
                     st.session_state.cooking_step = 0
                     st.session_state.active_tab = "Cooking Mode"
                     st.rerun()
             with btn_col2:
-                if st.button("Remove", key=f"fb_del_{r.get('id', idx)}", use_container_width=True):
+                if st.button("Remove", key=f"fb_del_{r.get('id', idx)}", width="stretch"):
                     st.session_state.saved_recipes = [item for item in saved_recipes if item.get("title") != r.get("title")]
                     st.success("Removed from Feastbook")
                     st.rerun()

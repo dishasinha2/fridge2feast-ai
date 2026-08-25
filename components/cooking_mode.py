@@ -57,17 +57,17 @@ def render_cooking_mode_component():
 
         with col1:
             if current_step > 0:
-                if st.button("← Previous Step", key="cook_prev_step", use_container_width=True):
+                if st.button("← Previous Step", key="cook_prev_step", width="stretch"):
                     st.session_state.cooking_step = current_step - 1
                     st.rerun()
 
         with col3:
             if current_step < total_steps - 1:
-                if st.button("Next Step →", key="cook_next_step", type="primary", use_container_width=True):
+                if st.button("Next Step →", key="cook_next_step", type="primary", width="stretch"):
                     st.session_state.cooking_step = current_step + 1
                     st.rerun()
             else:
-                if st.button("🎉 Complete Feast!", key="cook_finish_btn", type="primary", use_container_width=True):
+                if st.button("🎉 Complete Feast!", key="cook_finish_btn", type="primary", width="stretch"):
                     st.session_state.cooking_step = total_steps
                     st.rerun()
 
@@ -114,7 +114,7 @@ def render_cooking_mode_component():
                 )
                 chef_note = st.text_input("Any extra notes?", placeholder="e.g. Loved the crispy texture, added a pinch of extra cumin")
 
-            submit_feedback = st.form_submit_button("💾 Save Feedback & Update Taste Profile", type="primary", use_container_width=True)
+            submit_feedback = st.form_submit_button("💾 Save Feedback & Update Taste Profile", type="primary", width="stretch")
             if submit_feedback:
                 # Silently update taste profile in session state
                 taste = st.session_state.get("taste_profile", {})
@@ -145,11 +145,11 @@ def render_cooking_mode_component():
         st.markdown("<hr style='border-color: #334155; margin: 20px 0;'>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🍳 Cook Another Recipe", use_container_width=True):
+            if st.button("🍳 Cook Another Recipe", width="stretch"):
                 st.session_state.cooking_step = 0
                 st.session_state.active_tab = "Recipe Dashboard"
                 st.rerun()
         with c2:
-            if st.button("📊 View Zero-Waste Analytics", use_container_width=True):
+            if st.button("📊 View Zero-Waste Analytics", width="stretch"):
                 st.session_state.active_tab = "Analytics"
                 st.rerun()

@@ -31,16 +31,16 @@ def render_sous_chef_component():
     prompt_to_send = None
 
     with qcol1:
-        if st.button("🔄 Ingredient Substitutions", key="sc_chip_sub", use_container_width=True):
+        if st.button("🔄 Ingredient Substitutions", key="sc_chip_sub", width="stretch"):
             prompt_to_send = "What ingredient substitutions can I use if I am missing some items in this recipe?"
     with qcol2:
-        if st.button("🌱 Make It Vegan", key="sc_chip_vegan", use_container_width=True):
+        if st.button("🌱 Make It Vegan", key="sc_chip_vegan", width="stretch"):
             prompt_to_send = "How can I easily adapt this recipe to be 100% vegan?"
     with qcol3:
-        if st.button("⚡ Reduce Cooking Time", key="sc_chip_time", use_container_width=True):
+        if st.button("⚡ Reduce Cooking Time", key="sc_chip_time", width="stretch"):
             prompt_to_send = "What shortcuts can I take to cut 10 minutes off the cooking time?"
     with qcol4:
-        if st.button("🌶️ Adjust Spice Level", key="sc_chip_spice", use_container_width=True):
+        if st.button("🌶️ Adjust Spice Level", key="sc_chip_spice", width="stretch"):
             prompt_to_send = "How do I tone down or increase the spice level without ruining the balance?"
 
     st.markdown("<hr style='border-color: #334155; margin: 15px 0;'>", unsafe_allow_html=True)

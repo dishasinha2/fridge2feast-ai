@@ -29,7 +29,7 @@ def render_auth():
                 name = st.text_input("Full Name", placeholder="Your Name")
                 email = st.text_input("Email Address", placeholder="name@example.com")
                 password = st.text_input("Password", type="password", placeholder="At least 8 chars with letter & number")
-                submit = st.form_submit_button("Create Account →", use_container_width=True, type="primary")
+                submit = st.form_submit_button("Create Account →", width="stretch", type="primary")
 
                 if submit:
                     user, err = signup_user(email, name, password)
@@ -42,7 +42,7 @@ def render_auth():
                         st.rerun()
 
             st.markdown("<div style='text-align: center; margin-top: 1rem;'>", unsafe_allow_html=True)
-            if st.button("Already have an account? Log In", use_container_width=True):
+            if st.button("Already have an account? Log In", width="stretch"):
                 st.session_state.auth_view = "login"
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -51,7 +51,7 @@ def render_auth():
             with st.form("login_form", clear_on_submit=False):
                 email = st.text_input("Email Address", placeholder="name@example.com")
                 password = st.text_input("Password", type="password", placeholder="Enter your password")
-                submit = st.form_submit_button("Log In →", use_container_width=True, type="primary")
+                submit = st.form_submit_button("Log In →", width="stretch", type="primary")
 
                 if submit:
                     user, err = login_user(email, password)
@@ -64,13 +64,13 @@ def render_auth():
                         st.rerun()
 
             st.markdown("<div style='text-align: center; margin-top: 1rem;'>", unsafe_allow_html=True)
-            if st.button("Don't have an account? Sign Up", use_container_width=True):
+            if st.button("Don't have an account? Sign Up", width="stretch"):
                 st.session_state.auth_view = "signup"
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div style='text-align: center; margin-top: 1rem;'>", unsafe_allow_html=True)
-        if st.button("🏠 Back to Home", use_container_width=True):
+        if st.button("🏠 Back to Home", width="stretch"):
             st.session_state.current_page = "landing"
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)

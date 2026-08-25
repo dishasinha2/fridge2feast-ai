@@ -1,9 +1,13 @@
+from datetime import date
+
 from models.ingredient import Ingredient
 from utils.pandas_utils import inventory_to_freshness_df, kitchen_insight_frames
 
 
 def _ingredient(name, category, shelf_life):
-    return Ingredient(1, 7, name, category, 1, "pcs", "FRESH", shelf_life, "", 1.0, "2026-08-24", "", shelf_life)
+    # The freshness engine deliberately uses today's date, so the fixture must
+    # be relative to today rather than becoming stale as calendar time passes.
+    return Ingredient(1, 7, name, category, 1, "pcs", "FRESH", shelf_life, "", 1.0, date.today().isoformat(), "", shelf_life)
 
 
 def test_kitchen_insights_are_derived_from_real_inventory_dataframe():

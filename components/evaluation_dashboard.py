@@ -76,7 +76,7 @@ def render_evaluation_component():
                 "Count": [tel.get("errors_503", 0), tel.get("errors_429", 0), tel.get("timeouts", 0), tel.get("validation_failures", 0), success],
                 "Handling Strategy": ["Bounded Exponential Backoff (3x)", "Graceful User Notice", "Timeout Retry", "Pydantic Schema Validation", "JSON Parsing & Extraction"]
             })
-            st.dataframe(err_df, hide_index=True, use_container_width=True)
+            st.dataframe(err_df, hide_index=True, width="stretch")
 
         with r_col2:
             st.markdown("#### ⏱️ Latency Distribution (ms)")
@@ -84,7 +84,7 @@ def render_evaluation_component():
                 lat_df = pd.DataFrame({"Call": [f"#{i+1}" for i in range(len(latencies))], "Latency (ms)": latencies})
                 fig_lat = px.line(lat_df, x="Call", y="Latency (ms)", markers=True, color_discrete_sequence=["#10b981"])
                 fig_lat.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#cbd5e1"), margin=dict(t=10, b=10, l=10, r=10))
-                st.plotly_chart(fig_lat, use_container_width=True)
+                st.plotly_chart(fig_lat, width="stretch")
             else:
                 st.info("Run an ingredient scan, recipe generation, or Sous-Chef query to populate live latency telemetry.")
 
@@ -103,7 +103,7 @@ def render_evaluation_component():
         with h_col2:
             st.write("")
             st.write("")
-            run_check_btn = st.button("⚡ Run Health Check Ping", type="primary", use_container_width=True)
+            run_check_btn = st.button("⚡ Run Health Check Ping", type="primary", width="stretch")
 
         if run_check_btn:
             with st.spinner(f"Pinging Gemini model ({test_model})..."):
@@ -174,7 +174,7 @@ def render_evaluation_component():
                     "Confidence Label": item.get("confidence_label", "High"),
                     "Verification Status": "Human Confirmed" if item.get("included", True) else "Excluded by User"
                 })
-            st.dataframe(pd.DataFrame(audit_records), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(audit_records), hide_index=True, width="stretch")
         else:
             st.info("No active inventory loaded yet. Scan a fridge image to add confirmed ingredients.")
 
@@ -201,7 +201,7 @@ def render_evaluation_component():
                 "Diet (w5)": f"{int(w['diet']*100)}%",
                 "Time (w6)": f"{int(w['time']*100)}%",
             })
-        st.dataframe(pd.DataFrame(prof_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(prof_rows), hide_index=True, width="stretch")
 
     # -------------------------------------------------------------
     # TAB 4: PROMPT VERSION REGISTRY
@@ -236,7 +236,7 @@ def render_evaluation_component():
                 "Purpose": SOUS_CHEF_PROMPT_META["purpose"],
             }
         ]
-        st.dataframe(pd.DataFrame(prompts_table), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(prompts_table), hide_index=True, width="stretch")
 
     # -------------------------------------------------------------
     # TAB 5: PRIVACY, SECURITY & ISOLATION AUDIT

@@ -22,9 +22,10 @@
 | Resource | Link |
 |---|---|
 | 📦 GitHub Repository | https://github.com/dishasinha2/fridge2feast-ai |
-| 🚀 Live Application | **ADD YOUR STREAMLIT URL HERE AFTER DEPLOYMENT** |
+| 🚀 Live Application |https://fridge2feast-ai.streamlit.app/ |
 | 🤖 AI Platform | Google Gemini |
 | 🎨 UI Framework | Streamlit |
+| 📦Linkedin post | https://lnkd.in/p/dh537ZYF |
 
 ---
 

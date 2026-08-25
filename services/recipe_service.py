@@ -12,8 +12,7 @@ from models.recipe import Recipe
 logger = logging.getLogger(__name__)
 
 RECIPE_PROMPT_TEMPLATE = """
-You are Fridge2Feast AI, a world-class zero-waste chef and culinary AI.
-Your goal is to turn available kitchen ingredients into a delicious, high-craft, personalized recipe while minimizing food waste.
+You are Fridge2Feast AI. Create one practical, zero-waste recipe.
 
 USER INVENTORY (ACTUAL INGREDIENTS IN USER'S KITCHEN):
 {inventory_text}
@@ -32,44 +31,15 @@ USER PREFERENCES & PARAMETERS:
 - Latest confirmed scan (use this context alongside the complete inventory): {latest_scan_text}
 - Relevant, anonymous cooking context: {history_text}
 
-CRITICAL RULES:
-1. Prioritize using the EXPIRING ingredients first to prevent food waste.
-2. "available_ingredients" is the **From Your Kitchen** section. ONLY include items that actually appear in the USER INVENTORY list above. Never claim an item is in their kitchen if it is not listed.
-3. "additional_ingredients" is the **You May Need** section. List only pantry staples (e.g. olive oil, salt, black pepper, water) or minimal optional additions not found in their inventory.
-4. Ensure instructions are clear, step-by-step, and numbered sequentially.
-5. Provide a "waste_saved_score" (integer between 60 and 100) reflecting how effectively this recipe rescues expiring food.
-6. Dietary safety is mandatory: Vegetarian excludes meat and seafood; Vegan excludes meat, seafood, eggs, dairy, and all animal-derived ingredients. Non-Vegetarian may use meat or seafood only when appropriate.
-7. Include preparation time, total time, substitutions when useful, storage guidance, and a short zero-waste explanation in the description or tips.
+RULES: Prioritize using the EXPIRING ingredients. "available_ingredients"
+(From Your Kitchen) must only contain inventory items. "additional_ingredients"
+(You May Need) may only contain minimal pantry staples. Respect the diet. Keep
+instructions to 3-6 concise steps and tips to 1-2 concise items.
 
-Output a strictly valid JSON object matching this exact schema:
-{{
-  "title": "Recipe Title",
-  "description": "Appetizing 1-2 sentence description highlighting the flavors and zero-waste rescue.",
-  "cuisine": "{cuisine}",
-  "meal_type": "{meal_type}",
-  "dietary_tags": ["Vegetarian", "Dairy-Free"],
-  "spice_level": "{spice_level}",
-  "cooking_time_minutes": 30,
-  "servings": {servings},
-  "available_ingredients": [
-    {{"name": "Tomatoes", "quantity": "2", "unit": "pcs", "note": "rescued from pantry"}}
-  ],
-  "additional_ingredients": [
-    {{"name": "Olive Oil", "quantity": "1", "unit": "tbsp", "optional_substitute": "any cooking oil"}},
-    {{"name": "Salt & Pepper", "quantity": "to taste", "unit": "", "optional_substitute": ""}}
-  ],
-  "instructions": [
-    "Wash and dice the rescued tomatoes into 1/2 inch cubes.",
-    "Heat olive oil in a skillet over medium heat...",
-    "Serve warm and enjoy!"
-  ],
-  "tips": [
-    "Save tomato skins or ends in a freezer bag for making vegetable broth."
-  ],
-  "waste_saved_score": 92
-}}
-
-Output ONLY the raw JSON object. Do not include markdown code block syntax or exterior commentary.
+Return only JSON with these fields: title, description, cuisine, meal_type,
+dietary_tags, spice_level, cooking_time_minutes, servings,
+available_ingredients, additional_ingredients, instructions, tips,
+waste_saved_score. Each ingredient object needs name, quantity, and unit.
 """
 
 
@@ -125,18 +95,25 @@ def generate_recipe(
     if not inventory:
         return None, "Your kitchen is empty. Scan your fridge or add ingredients first."
 
+    # Bound prompt size: a whole pantry and full scan metadata add latency without
+    # improving a single recipe. Urgent items are always kept at the front.
+    prompt_inventory = (expiring + [item for item in inventory if item not in expiring])[:35]
     inventory_lines = [
         f"- {item.name}: {item.quantity} {item.unit} (Category: {item.category}, Status: {item.freshness_status}, Days Left: {item.days_remaining})"
-        for item in inventory
+        for item in prompt_inventory
     ]
     inventory_text = "\n".join(inventory_lines)
 
     expiring_lines = [
         f"- {item.name}: {item.quantity} {item.unit} ({item.freshness_status})"
-        for item in expiring
+        for item in expiring[:15]
     ]
     expiring_text = "\n".join(expiring_lines) if expiring_lines else "None (all ingredients are fresh)."
-    latest_scan_text = json.dumps(latest_scanned_ingredients or [], ensure_ascii=False)
+    latest_scan_text = json.dumps([
+        {"name": item.get("name"), "freshness_status": item.get("freshness_status")}
+        for item in (latest_scanned_ingredients or [])[:15]
+        if isinstance(item, dict) and item.get("name")
+    ], ensure_ascii=False)
     history = get_cooking_history(user_id)
     saved = get_saved_recipes(user_id)
     history_cuisines = [row.get("cuisine") for row in history if row.get("cuisine")]
@@ -160,14 +137,21 @@ def generate_recipe(
         diet=diet,
         spice_level=spice_level,
         cooking_time_minutes=cooking_time_minutes,
-        custom_prompt=custom_prompt or "Create a balanced, tasty zero-waste meal.",
+        custom_prompt=(custom_prompt or "Create a balanced, tasty zero-waste meal.")[:300],
         latest_scan_text=latest_scan_text,
         history_text=history_text,
     )
 
     try:
         raw_text = generate_json_content(
-            prompt, temperature=0.4, client=get_gemini_client()
+            prompt,
+            temperature=0.3,
+            max_output_tokens=800,
+            # Lite is optimized for quick, structured recipe generation. The
+            # regular Flash model remains the automatic reliability fallback.
+            primary_model="gemini-flash-lite-latest",
+            fallback_model="gemini-flash-latest",
+            client=get_gemini_client(),
         )
 
         if not raw_text:

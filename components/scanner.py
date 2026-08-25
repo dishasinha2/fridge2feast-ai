@@ -1,8 +1,13 @@
 """Scanner Component with Gemini Vision & Review Workflow."""
+import logging
+import time
 import streamlit as st
 from services.vision_service import analyze_fridge_image
 from services.kitchen_service import batch_add_ingredients
 from utils.validation import VALID_CATEGORIES, VALID_UNITS, validate_detected_ingredient
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def confirm_scan_items(user_id: int, reviewed_items: list[dict]) -> tuple[list, list[dict]]:
@@ -64,23 +69,46 @@ def render_scanner():
             help="Upload a clear photo of your fridge shelves, crisper drawer, or pantry."
         )
         if uploaded_file is not None:
+            extraction_started = time.perf_counter()
+            logger.info("Scanner received upload mime_type=%s", uploaded_file.type or "unknown")
             image_bytes = uploaded_file.getvalue()
             filename = uploaded_file.name
             mime_type = uploaded_file.type
+            logger.info(
+                "Scanner image byte extraction completed duration_ms=%d byte_count=%d mime_type=%s",
+                (time.perf_counter() - extraction_started) * 1000,
+                len(image_bytes),
+                mime_type or "unknown",
+            )
             st.image(image_bytes, caption="Uploaded Photo Preview", width="stretch")
 
     with tab_camera:
         camera_file = st.camera_input("Take a photo of your fridge")
         if camera_file is not None:
+            extraction_started = time.perf_counter()
+            logger.info("Scanner received camera image mime_type=image/jpeg")
             image_bytes = camera_file.getvalue()
             filename = "camera_snapshot.jpg"
             mime_type = "image/jpeg"
+            logger.info(
+                "Scanner image byte extraction completed duration_ms=%d byte_count=%d mime_type=%s",
+                (time.perf_counter() - extraction_started) * 1000,
+                len(image_bytes),
+                mime_type,
+            )
 
     if image_bytes:
         st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
         if st.button("✨ Analyze with Gemini Vision", type="primary", width="stretch"):
             with st.spinner("Preparing photo and identifying ingredients..."):
+                scan_started = time.perf_counter()
                 success, items, err_msg = analyze_fridge_image(image_bytes, filename, mime_type)
+                logger.info(
+                    "Scanner vision result returned duration_ms=%d success=%s item_count=%d",
+                    (time.perf_counter() - scan_started) * 1000,
+                    success,
+                    len(items),
+                )
                 if not success:
                     st.error(err_msg)
                 else:

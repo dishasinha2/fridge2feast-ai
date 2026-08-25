@@ -46,7 +46,7 @@ def test_large_upload_is_downsized_to_a_fast_jpeg_payload():
 
     assert mime_type == "image/jpeg"
     with Image.open(io.BytesIO(optimized)) as output:
-        assert max(output.size) == 1600
+        assert max(output.size) == 1280
 
 def test_image_validation_invalid_signature():
     fake_bytes = b"NOT_A_REAL_IMAGE_BYTES"
@@ -106,3 +106,46 @@ def test_gemini_vision_output_is_validated_before_inventory_confirmation(monkeyp
     assert items == [items[0]]
     assert items[0]["name"] == "Tomatoes"
     assert len(models.contents) == 2  # Prompt plus a Gemini image part, never raw unvalidated inventory.
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_message"),
+    [
+        (TimeoutError("request timeout"), "timed out after 20 seconds"),
+        (RuntimeError("service unavailable"), "temporarily unavailable"),
+    ],
+)
+def test_vision_request_failures_return_actionable_errors(monkeypatch, error, expected_message):
+    monkeypatch.setattr("services.vision_service.get_gemini_client", lambda: type("Client", (), {"models": type("Models", (), {"generate_content": lambda *args, **kwargs: None})()})())
+    monkeypatch.setattr("services.vision_service.generate_json_content", lambda *args, **kwargs: (_ for _ in ()).throw(error))
+    image = Image.new("RGB", (10, 10), color="green")
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+
+    success, items, message = analyze_fridge_image(buffer.getvalue(), "fridge.jpg", "image/jpeg")
+
+    assert not success and items == []
+    assert expected_message in message
+
+
+def test_vision_uses_verified_model_and_passes_a_binary_image_part(monkeypatch):
+    captured = {}
+    monkeypatch.setattr("services.vision_service.get_gemini_client", lambda: type("Client", (), {"models": type("Models", (), {"generate_content": lambda *args, **kwargs: None})()})())
+
+    def fake_generate(contents, **kwargs):
+        captured["contents"] = contents
+        captured.update(kwargs)
+        return json.dumps([{"name": "Tomato", "estimated_quantity": 1, "unit": "pcs"}])
+
+    monkeypatch.setattr("services.vision_service.generate_json_content", fake_generate)
+    image = Image.new("RGB", (10, 10), color="green")
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+
+    success, items, error = analyze_fridge_image(buffer.getvalue(), "fridge.jpg", "image/jpeg")
+
+    assert success and not error and items[0]["name"] == "Tomato"
+    assert captured["primary_model"] == "gemini-3.6-flash"
+    assert captured["request_timeout_ms"] == 20_000
+    assert len(captured["contents"]) == 2
+    assert captured["contents"][1].inline_data.data

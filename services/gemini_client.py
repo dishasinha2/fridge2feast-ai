@@ -5,6 +5,8 @@ from functools import lru_cache
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+DEFAULT_REQUEST_TIMEOUT_MS = 20_000
 
 def get_gemini_api_key() -> str:
     """Retrieve Gemini API key from environment or Streamlit secrets safely."""
@@ -51,39 +53,73 @@ def generate_json_content(
     contents: Any,
     *,
     temperature: float,
+    max_output_tokens: Optional[int] = None,
     primary_model: str = "gemini-flash-latest",
-    fallback_model: str = "gemini-flash-lite-latest",
+    fallback_model: Optional[str] = "gemini-flash-lite-latest",
+    request_timeout_ms: int = DEFAULT_REQUEST_TIMEOUT_MS,
     client: Optional[Any] = None,
 ) -> str:
     """Generate JSON with the one shared Gemini boundary used by AI services.
 
-    This intentionally does not retry arbitrary failures: a single fallback model is
-    enough to improve availability without multiplying requests on a Streamlit rerun.
-    Callers invoke it only from explicit user actions and translate errors for the UI.
+    Each model request uses one SDK attempt and a strict timeout. A caller may
+    opt into one distinct fallback model; no hidden SDK retries are allowed.
     """
     client = client or get_gemini_client()
     if hasattr(client, "models") and hasattr(client.models, "generate_content"):
         try:
             from google.genai import types
-            config: Any = types.GenerateContentConfig(
-                temperature=temperature, response_mime_type="application/json"
+            http_options = types.HttpOptions(
+                timeout=request_timeout_ms,
+                retry_options=types.HttpRetryOptions(attempts=1),
             )
+            config_values = {
+                "temperature": temperature,
+                "response_mime_type": "application/json",
+                "http_options": http_options,
+                # This app never supplies callable tools. Disabling AFC avoids
+                # the SDK's deprecated Models.generate_content AFC path.
+                "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+            }
+            if max_output_tokens is not None:
+                config_values["max_output_tokens"] = max_output_tokens
+            config: Any = types.GenerateContentConfig(**config_values)
         except ImportError:
-            config = {"temperature": temperature, "response_mime_type": "application/json"}
+            config = {
+                "temperature": temperature,
+                "response_mime_type": "application/json",
+                "http_options": {"timeout": request_timeout_ms, "retry_options": {"attempts": 1}},
+                "automatic_function_calling": {"disable": True},
+            }
+            if max_output_tokens is not None:
+                config["max_output_tokens"] = max_output_tokens
 
         try:
+            logger.info("Gemini request starting model=%s timeout_ms=%d", primary_model, request_timeout_ms)
             response = client.models.generate_content(
                 model=primary_model, contents=contents, config=config
             )
         except Exception as primary_error:
+            if not fallback_model or fallback_model == primary_model:
+                raise
             logger.warning(
-                "Gemini primary model unavailable; trying configured fallback (%s)",
+                "Gemini request failed model=%s error=%s; trying one fallback model=%s",
+                primary_model,
                 type(primary_error).__name__,
+                fallback_model,
             )
+            logger.info("Gemini request starting model=%s timeout_ms=%d", fallback_model, request_timeout_ms)
             response = client.models.generate_content(
                 model=fallback_model, contents=contents, config=config
             )
-        return str(getattr(response, "text", "") or "")
+        response_model = fallback_model if 'primary_error' in locals() else primary_model
+        logger.info("Gemini response received model=%s", response_model)
+        response_text = str(getattr(response, "text", "") or "")
+        logger.info(
+            "Gemini response text extraction completed model=%s response_length=%d",
+            response_model,
+            len(response_text),
+        )
+        return response_text
 
     # Compatibility for installations still using google-generativeai.
     model = client.GenerativeModel("gemini-1.5-flash")
